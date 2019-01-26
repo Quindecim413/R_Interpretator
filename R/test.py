@@ -9,6 +9,7 @@ import R.LanguageObjs as language
 
 this_env: Environment = Environment(builtin.built_in_env)
 this_env.set_global(this_env)
+print('123')
 
 # items1 = [
 #     language.AssignObj.create(objs.SymbolObj('h'), Atomic.create(1, types.IntegerType()), 'plain'),
