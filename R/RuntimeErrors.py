@@ -97,3 +97,7 @@ class ArgumentCannotBeHandledByFun(R_RuntimeError):
     def __init__(self, arg_pos, arg_type, fun_name):
         super(ArgumentCannotBeHandledByFun, self).__init__('argument {} (type \'{}\') cannot be handled by \'{}\''
                                                          .format(arg_pos, arg_type, fun_name))
+
+class InvalidArg(R_RuntimeError):
+    def __init__(self, arg_name):
+        super(InvalidArg, self).__init__("invalid '{}' argument".format(arg_name))

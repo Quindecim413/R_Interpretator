@@ -4,8 +4,9 @@ import R.Types as types
 
 from R.Environment import Environment
 from R.Function import FunctionObj, RObj, Arg, DotsObj, Param
-from R.AtomicObjs import ListItem, ListObj, VectorObj, VectorItem, Atomic, EmptyParamObj, NULLObj
+from R.AtomicObjs import ListItem, ListObj, VectorObj, VectorItem, EmptyParamObj, NULLObj
 import R.RuntimeErrors as errors
+from R.Atomics import *
 
 
 built_in_env: Environment = Environment(None)
@@ -28,7 +29,7 @@ class BuiltInFun(FunctionObj):
 
 
 def cast_vector_items(items, python_type, r_type):
-    ret = [VectorItem(item.name, Atomic(python_type(item.value.value), r_type())) for item in items]
+    ret = [VectorItem(item[0], Atomic(python_type(item[1].value), r_type())) for item in items]
     return ret
 
 
@@ -73,11 +74,15 @@ class VectorFun(BuiltInFun):
     def compute(self, params: List[Param], env: Environment):
         args = self.arrange_args(params)
         dots: DotsObj = args['...']
+
+        if dots.get_type().name == 'NULL':
+            return NULLObj()
+
         items = dots.items
         if len(items) == 0:
-            return RObj.get_r_obj('NULLObj').create()
+            return NULLObj()
 
-        items_types = set(map(lambda i: i.value.get_type().name, items))
+        items_types = set(map(lambda i: i[1].get_type().name, items))
         casts = ['list', 'character', 'double', 'integer', 'logical']
         if set(casts).issubset(items_types):
             list_fun: FunctionObj = built_in_env.find_function('list')
@@ -86,10 +91,10 @@ class VectorFun(BuiltInFun):
 
         flat_items = []
         for item in items:
-            if isinstance(item.value, Atomic):
-                flat_items.append(VectorItem(item.name, item.value))
-            elif isinstance(item.value, VectorObj):
-                flat_items.extend(item.value.items)
+            if isinstance(item[1], Atomic):
+                flat_items.append(VectorItem(item[0], item[1]))
+            elif isinstance(item[1], VectorObj):
+                flat_items.extend(item[1].items)
             else:
                 raise Exception('Invalid item in c function - {}'.format(item))
 
@@ -115,6 +120,154 @@ register_built_in_function(VectorFun)
 
 
 @RObj.register_r_obj
+class CharacterFun(BuiltInFun):
+    @staticmethod
+    def create(*args):
+        name = 'character'
+        args = [Arg('length', VectorObj.create([VectorItem(None, Atomic(0, types.IntegerType()))]))]
+        return CharacterFun(name, args)
+
+    def compute(self, params: List[Param], env: Environment):
+        args = self.arrange_args(params)
+        ln: VectorObj = args['length']
+        if ln.get_type().name not in ['double', 'integer']:
+            raise errors.InvalidArg('length')
+
+        if len(ln.items) != 1:
+            raise errors.InvalidArg('length')
+
+        val = ln.items[0][1]
+
+        if val.is_inf:
+            raise errors.R_RuntimeError('vector size cannot be infinite')
+        elif val.is_na:
+            raise errors.InvalidArg('length')
+        elif val.is_nan:
+            raise errors.R_RuntimeError('vector size cannot be NA/NaN')
+
+        count = val.value
+
+        items = [VectorItem(None, Atomic('', types.CharacterType())) for _ in range(int(count) * (-1 if val.is_neg else 1))]
+
+        ret = VectorObj(items, types.CharacterType())
+        return ret
+
+
+register_built_in_function(CharacterFun)
+
+
+@RObj.register_r_obj
+class NumericFun(BuiltInFun):
+    @staticmethod
+    def create(*args):
+        name = 'numeric'
+        args = [Arg('length', VectorObj.create([VectorItem(None, Atomic(0, types.IntegerType()))]))]
+        return NumericFun(name, args)
+
+    def compute(self, params: List[Param], env: Environment):
+        args = self.arrange_args(params)
+        ln: VectorObj = args['length']
+        if ln.get_type().name not in ['double', 'integer']:
+            raise errors.InvalidArg('length')
+
+        if len(ln.items) != 1:
+            raise errors.InvalidArg('length')
+
+        val = ln.items[0][1]
+
+        if val.is_inf:
+            raise errors.R_RuntimeError('vector size cannot be infinite')
+        elif val.is_na:
+            raise errors.InvalidArg('length')
+        elif val.is_nan:
+            raise errors.R_RuntimeError('vector size cannot be NA/NaN')
+
+        count = val.value
+
+        items = [VectorItem(None, Atomic(0, types.DoubleType())) for _ in range(int(count) * (-1 if val.is_neg else 1))]
+
+        ret = VectorObj(items, types.DoubleType())
+        return ret
+
+
+register_built_in_function(NumericFun)
+
+
+@RObj.register_r_obj
+class IntegerFun(BuiltInFun):
+    @staticmethod
+    def create(*args):
+        name = 'integer'
+        args = [Arg('length', VectorObj.create([VectorItem(None, Atomic(0, types.IntegerType()))]))]
+        return IntegerFun(name, args)
+
+    def compute(self, params: List[Param], env: Environment):
+        args = self.arrange_args(params)
+        ln: VectorObj = args['length']
+        if ln.get_type().name not in ['double', 'integer']:
+            raise errors.InvalidArg('length')
+
+        if len(ln.items) != 1:
+            raise errors.InvalidArg('length')
+
+        val = ln.items[0][1]
+
+        if val.is_inf:
+            raise errors.R_RuntimeError('vector size cannot be infinite')
+        elif val.is_na:
+            raise errors.InvalidArg('length')
+        elif val.is_nan:
+            raise errors.R_RuntimeError('vector size cannot be NA/NaN')
+
+        count = val.value
+
+        items = [VectorItem(None, Atomic(0, types.IntegerType())) for _ in range(int(count) * (-1 if val.is_neg else 1))]
+
+        ret = VectorObj(items, types.IntegerType())
+        return ret
+
+
+register_built_in_function(IntegerFun)
+
+
+@RObj.register_r_obj
+class LogicalFun(BuiltInFun):
+    @staticmethod
+    def create(*args):
+        name = 'logical'
+        args = [Arg('length', VectorObj.create([VectorItem(None, Atomic(0, types.IntegerType()))]))]
+        return LogicalFun(name, args)
+
+    def compute(self, params: List[Param], env: Environment):
+        args = self.arrange_args(params)
+        ln: VectorObj = args['length']
+        if ln.get_type().name not in ['double', 'integer']:
+            raise errors.InvalidArg('length')
+
+        if len(ln.items) != 1:
+            raise errors.InvalidArg('length')
+
+        val = ln.items[0][1]
+
+        if val.is_inf:
+            raise errors.R_RuntimeError('vector size cannot be infinite')
+        elif val.is_na:
+            raise errors.InvalidArg('length')
+        elif val.is_nan:
+            raise errors.R_RuntimeError('vector size cannot be NA/NaN')
+
+        count = val.value
+
+        items = [VectorItem(None, Atomic(False, types.LogicalType())) for _ in range(int(count) * (-1 if val.is_neg else 1))]
+
+        ret = VectorObj(items, types.LogicalType())
+        return ret
+
+
+register_built_in_function(LogicalFun)
+
+
+@RObj.register_r_obj
 class ListFun(BuiltInFun):
     @staticmethod
     def create(*args):
@@ -136,384 +289,22 @@ class ListFun(BuiltInFun):
 register_built_in_function(ListFun)
 
 
-class UnsupportedVectorType(Exception):
-    def __init__(self, invalid_type, operand_index):
-        super(UnsupportedVectorType, self).__init__('unsupported vector type - {}'.format(invalid_type))
-        self.operand_index = operand_index
-
-
-def get_more_important_vector_type(type1, type2):
-    tps = [type1.name, type2.name]
-    # if 'list' in tps:
-    #     return types.ListType()
-    if 'character' in tps:
-        return types.CharacterType()
-    elif 'double' in tps:
-        return types.DoubleType()
-    elif 'integer' in tps:
-        return types.IntegerType()
-    elif 'logical' in tps:
-        return types.LogicalType()
-    first = tps[0] not in ['character', 'double', 'integer', 'logical']
-    raise UnsupportedVectorType(tps, operand_index=0 if first else 1)
-
-
-def atomic_add(e1: Atomic, e2: Atomic):
-    type = get_more_important_vector_type(e1.get_type(), e2.get_type())
-
-    if type.name == 'character':
-        raise errors.NonNumericToBinary()
-
-    is_nan = e1.is_nan or e2.is_nan
-    is_na = e2.is_na or e2.is_na or (e1.is_inf and e2.is_inf and (e1.is_neg != e2.is_neg))
-    is_inf = (e1.is_inf or e2.is_inf)
-    is_neg = (e1.is_inf and not e2.is_inf and e1.is_neg) or (not e1.is_inf and e2.is_inf and e2.is_neg)
-
-    if is_nan:
-        return Atomic(None, type, is_nan=True)
-    elif is_na:
-        return Atomic(None, type, is_na=True)
-    elif is_inf:
-        return Atomic(None, type, is_inf=True, is_neg=is_neg)
-
-    if type.name == 'double':
-        val = float(e1.value) * (-1 if e1.is_neg else 1) + float(e2.value) * (-1 if e2.is_neg else 1)
-    elif type.name == 'integer':
-        val = int(int(e1.value) * (-1 if e1.is_neg else 1) + int(e2.value) * (-1 if e2.is_neg else 1))
-    elif type.name == 'logical':
-        val = int(int(e1.value) * (-1 if e1.is_neg else 1) + int(e2.value) * (-1 if e2.is_neg else 1))
-        type = types.IntegerType()
+def perform_op_on_vector_or_atomic(e1, e2, operation):
+    res = []
+    if isinstance(e1, Atomic) and not isinstance(e2, Atomic):
+        for v in e2.items:
+            res.append(operation(e1, v[1]))
+    elif not isinstance(e1, Atomic) and isinstance(e2, Atomic):
+        for v in e1.items:
+            res.append(operation(v, e2[1]))
+    elif isinstance(e1, Atomic) and isinstance(e2, Atomic):
+        res.append(operation(e1, e2))
     else:
-        raise Exception('invalid vector type - {}'.format(type.name))
-
-    if val < 0:
-        return Atomic(-val, type, is_neg=True)
-    else:
-        return Atomic(val, type)
-
-
-def atomic_subtract(e1: Atomic, e2: Atomic):
-    type = get_more_important_vector_type(e1.get_type(), e2.get_type())
-
-    if type.name == 'character':
-        raise errors.NonNumericToBinary()
-    new_e2 = Atomic(e2.value, e2.type, is_na=e2.is_na, is_nan=e2.is_nan, is_inf=e2.is_inf, is_neg=not e2.is_neg)
-
-    ret = atomic_add(e1, new_e2)
-    return ret
-
-
-def atomic_multiply(e1: Atomic, e2: Atomic):
-    type = get_more_important_vector_type(e1.get_type(), e2.get_type())
-
-    if type.name == 'character':
-        raise errors.NonNumericToBinary()
-
-    is_nan = e1.is_nan or e2.is_nan
-    is_na = e1.is_na or e2.is_na or ((e1.is_inf or e2.is_inf) and (e1.value == 0 or e2.value == 0))
-    is_inf = (e1.is_inf or e2.is_inf)
-    is_neg = e1.is_neg != e2.is_neg
-
-    if is_nan:
-        return Atomic(None, type, is_nan=True)
-    elif is_na:
-        return Atomic(None, type, is_na=True)
-    elif is_inf:
-        return Atomic(None, type, is_inf=True, is_neg=is_neg)
-
-    if type.name == 'double':
-        val = float(e1.value) * float(e2.value) * (-1 if e1.is_neg != e2.is_neg else 1)
-    elif type.name == 'integer':
-        val = int(int(e1.value) * int(e2.value) * (-1 if e1.is_neg != e2.is_neg else 1))
-    elif type.name == 'logical':
-        val = int(e1.value) * int(e2.value) * (-1 if e1.is_neg != e2.is_neg else 1)
-        type = types.IntegerType()
-    else:
-        raise Exception('invalid vector type - {}'.format(type.name))
-
-    if val < 0:
-        return Atomic(-val, type, is_neg=True)
-    else:
-        return Atomic(val, type)
-
-
-def atomic_divide(e1: Atomic, e2: Atomic):
-    type = get_more_important_vector_type(e1.get_type(), e2.get_type())
-
-    if type.name == 'character':
-        raise errors.NonNumericToBinary()
-
-    if e2.is_inf:
-        new_e2 = Atomic(False, types.LogicalType(), is_inf=False, is_neg=e2.is_neg)
-    else:
-        if e2.value == 0 and not e2.is_na and not e2.is_nan:
-            new_e2 = Atomic(None, e2.type, is_na=False, is_nan=False, is_inf=True, is_neg=e2.is_neg)
-        elif not e2.is_na and not e2.is_nan:
-            new_e2 = Atomic(1 / e2.value, e2.type, is_na=e2.is_na, is_nan=e2.is_nan, is_inf=e2.is_inf, is_neg=e2.is_neg)
-        else:
-            new_e2 = e2
-    ret = atomic_multiply(e1, new_e2)
-    return ret
-
-
-def atomic_power(e1: Atomic, e2: Atomic):
-    type = get_more_important_vector_type(e1.get_type(), e2.get_type())
-
-    if type.name == 'character':
-        raise errors.NonNumericToBinary()
-
-    is_na = e1.is_na and not (e2.value == 0)
-    is_nan = (e1.is_nan and e2.is_na) or (e1.is_nan and (e2.value == 0)) or ((e1.value == 0) and e2.is_nan)
-    is_inf = (e1.is_inf and not e2.is_inf and e2.is_neg) or (e1.is_inf and e2.value != 0)
-
-    if is_na:
-        return Atomic(None, type, is_na=True)
-    elif is_nan:
-        return Atomic(None, type, is_nan=True)
-    elif is_inf:
-        return Atomic(None, type, is_inf=True)
-    elif e1.value == 1 and e1.is_neg and e2.value == 0:
-        return Atomic(1, type)
-    elif e1.is_neg and e2.value == int(e2.value):
-        ret = Atomic(e1.value ** e2.value, type)
-        return ret
-
-    if type.name == 'double':
-        val = (float(e1.value) * (-1 if e1.is_neg else 1)) ** (float(e2.value) * (-1 if e1.is_neg else 1))
-    elif type.name == 'integer':
-        val = int((int(e1.value) * (-1 if e1.is_neg else 1)) ** (int(e2.value) * (-1 if e1.is_neg else 1)))
-    elif type.name == 'logical':
-        val = (int(e1.value) * (-1 if e1.is_neg else 1)) ** (int(e2.value) * (-1 if e1.is_neg else 1))
-        type = types.IntegerType()
-    else:
-        raise Exception('invalid vector type - {}'.format(type.name))
-
-    if isinstance(val, complex):
-        return Atomic(None, type, is_nan=True)
-
-    if val < 0:
-        return Atomic(-val, type, is_neg=True)
-    else:
-        return Atomic(val, type)
-
-# TODO
-
-def atomic_mod(e1: Atomic, e2: Atomic):
-    type = get_more_important_vector_type(e1.get_type(), e2.get_type())
-
-    if type.name == 'character':
-        raise errors.NonNumericToBinary()
-
-    is_na = e1.is_na and not (e2.value == 0)
-    is_nan = (e1.is_nan and e2.is_na) or (e1.is_nan and (e2.value == 0)) or ((e1.value == 0) and e2.is_nan)
-    is_inf = (e1.is_inf and not e2.is_inf and e2.is_neg) or (e1.is_inf and e2.value != 0)
-
-    if is_na:
-        return Atomic(None, type, is_na=True)
-    elif is_nan:
-        return Atomic(None, type, is_nan=True)
-    elif is_inf:
-        return Atomic(None, type, is_inf=True)
-    elif e1.value == 1 and e1.is_neg and e2.value == 0:
-        return Atomic(1, type)
-    elif e1.is_neg and e2.value == int(e2.value):
-        ret = Atomic(e1.value ** e2.value, type)
-        return ret
-
-    if type.name == 'double':
-        val = (float(e1.value) * (-1 if e1.is_neg else 1)) ** (float(e2.value) * (-1 if e1.is_neg else 1))
-    elif type.name == 'integer':
-        val = int((int(e1.value) * (-1 if e1.is_neg else 1)) ** (int(e2.value) * (-1 if e1.is_neg else 1)))
-    elif type.name == 'logical':
-        val = (int(e1.value) * (-1 if e1.is_neg else 1)) ** (int(e2.value) * (-1 if e1.is_neg else 1))
-        type = types.IntegerType()
-    else:
-        raise Exception('invalid vector type - {}'.format(type.name))
-
-    if isinstance(val, complex):
-        return Atomic(None, type, is_nan=True)
-
-    if val < 0:
-        return Atomic(-val, type, is_neg=True)
-    else:
-        return Atomic(val, type)
-
-
-def atomic_not(e: Atomic):
-    if e.type.name == 'character':
-        raise errors.InvalidArgType()
-
-    if e.is_inf:
-        ret = Atomic(False, types.LogicalType())
-        return ret
-    elif e.is_na or e.is_nan:
-        return Atomic(None, e.type, is_na=True)
-    ret = Atomic(not bool(e.value), types.LogicalType())
-    return ret
-
-
-def atomic_and(e1: Atomic, e2: Atomic):
-    type = get_more_important_vector_type(e1.get_type(), e2.get_type())
-
-    if e1.is_na or e2.is_na:
-        return Atomic(None, types.LogicalType(), is_na=True)
-    if e1.is_nan or e2.is_nan:
-        return Atomic(None, types.LogicalType(), is_na=True)
-    if e1.is_inf and e2.is_inf:
-        return Atomic(True, types.LogicalType())
-    if (e1.is_inf and e2.value == 0) or (e1.value == 0 and e2.is_inf):
-        return Atomic(False, types.LogicalType())
-
-    if type.name == 'character':
-        val = str(e1.value) and str(e2.value)
-    elif type.name == 'double':
-        val = float(e1.value) * (-1 if e1.is_neg else 1) and float(e2.value) * (-1 if e2.is_neg else 1)
-    elif type.name == 'integer':
-        val = int(e1.value) * (-1 if e1.is_neg else 1) and int(e2.value) * (-1 if e2.is_neg else 1)
-    elif type.name == 'logical':
-        val = bool(e1.value) and bool(e2.value)
-    else:
-        raise Exception('invalid vector type - {}'.format(type.name))
-
-    return Atomic(bool(val), types.LogicalType())
-
-
-def atomic_or(e1: Atomic, e2: Atomic):
-    type = get_more_important_vector_type(e1.get_type(), e2.get_type())
-
-    if e1.is_na or e2.is_na:
-        return Atomic(None, types.LogicalType(), is_na=True)
-    if e1.is_nan or e2.is_nan:
-        return Atomic(None, types.LogicalType(), is_na=True)
-    if e1.is_inf or e2.is_inf:
-        return Atomic(True, types.LogicalType())
-    if (e1.is_inf and e2.value == 0) or (e1.value == 0 and e2.is_inf):
-        return Atomic(False, types.LogicalType())
-
-    if type.name == 'character':
-        val = str(e1.value) or str(e2.value)
-    elif type.name == 'double':
-        val = float(e1.value) * (-1 if e1.is_neg else 1) or float(e2.value) * (-1 if e2.is_neg else 1)
-    elif type.name == 'integer':
-        val = int(e1.value) * (-1 if e1.is_neg else 1) or int(e2.value) * (-1 if e2.is_neg else 1)
-    elif type.name == 'logical':
-        val = bool(e1.value) or bool(e2.value)
-    else:
-        raise Exception('invalid vector type - {}'.format(type.name))
-
-    return Atomic(bool(val), types.LogicalType())
-
-
-def atomic_is_equal(e1: Atomic, e2: Atomic):
-    type = get_more_important_vector_type(e1.get_type(), e2.get_type())
-    if e1.is_na or e2.is_na:
-        return Atomic(None, types.LogicalType(), is_na=True)
-    if e1.is_nan or e2.is_nan:
-        return Atomic(None, types.LogicalType(), is_na=True)
-    if e1.is_inf and e2.is_inf:
-        return Atomic(e1.value == e2.value, types.LogicalType())
-
-    if type.name == 'character':
-        return Atomic(str(e1.value) == str(e2.value), types.LogicalType())
-    elif type.name == 'double':
-        return Atomic(float(e1.value) == float(e2.value), types.LogicalType())
-    elif type.name == 'integer':
-        return Atomic(int(e1.value) == int(e2.value), types.LogicalType())
-    elif type.name == 'logical':
-        return Atomic(bool(e1.value) == bool(e2.value), types.LogicalType())
-    else:
-        raise Exception('invalid vector type - {}'.format(type.name))
-
-
-def atomic_is_not_equal(e1: Atomic, e2: Atomic):
-    res = atomic_is_equal(e1, e2)
-    if res.get_type().name == 'logical':
-        res.value = not res.value
+        if len(e1.items) == 0 or len(e2.items) == 0:
+            return []
+        for l, r in concat_vectors(e1.items, e2.items):
+            res.append(operation(l[1], r[1]))
     return res
-
-
-def atomic_is_greater(e1: Atomic, e2: Atomic):
-    type = get_more_important_vector_type(e1.get_type(), e2.get_type())
-    if e1.is_na or e2.is_na:
-        return Atomic(None, types.LogicalType(), is_na=True)
-    if e1.is_nan or e2.is_nan:
-        return Atomic(None, types.LogicalType(), is_na=True)
-    if e1.is_inf and e2.is_inf:
-        return Atomic(e1.is_neg < e2.is_neg, types.LogicalType())
-    if e1.is_inf != e2.is_inf:
-        return Atomic(e1.is_inf and not e1.is_neg or e2.is_inf and e2.is_neg, types.LogicalType())
-
-    if type.name == 'character':
-        return Atomic(str(e1.value) > str(e2.value), types.LogicalType())
-    elif type.name == 'double':
-        return Atomic(float(e1.value) * (-1 if e1.is_neg else 1) > float(e2.value) * (-1 if e2.is_neg else 1),
-                      types.LogicalType())
-    elif type.name == 'integer':
-        return Atomic(int(e1.value) * (-1 if e1.is_neg else 1) > int(e2.value) * (-1 if e2.is_neg else 1),
-                      types.LogicalType())
-    elif type.name == 'logical':
-        return Atomic(bool(e1.value) > bool(e2.value), types.LogicalType())
-    else:
-        raise Exception('invalid vector type - {}'.format(type.name))
-
-
-def atomic_is_less(e1: Atomic, e2: Atomic):
-    ret = atomic_is_greater(e2, e1)
-    return ret
-
-
-def atomic_is_equal_or_greater(e1: Atomic, e2: Atomic):
-    type = get_more_important_vector_type(e1.get_type(), e2.get_type())
-    if e1.is_na or e2.is_na:
-        return Atomic(None, types.LogicalType(), is_na=True)
-    if e1.is_nan or e2.is_nan:
-        return Atomic(None, types.LogicalType(), is_na=True)
-    if e1.is_inf and e2.is_inf:
-        return Atomic(e1.is_neg < e2.is_neg, types.LogicalType())
-    if e1.is_inf != e2.is_inf:
-        return Atomic(e1.is_inf and not e1.is_neg or e2.is_inf and e2.is_neg, types.LogicalType())
-
-    if type.name == 'character':
-        return Atomic(str(e1.value) >= str(e2.value), types.LogicalType())
-    elif type.name == 'double':
-        return Atomic(float(e1.value) * (-1 if e1.is_neg else 1) >= float(e2.value) * (-1 if e2.is_neg else 1),
-                      types.LogicalType())
-    elif type.name == 'integer':
-        return Atomic(int(e1.value) * (-1 if e1.is_neg else 1) >= int(e2.value) * (-1 if e2.is_neg else 1),
-                      types.LogicalType())
-    elif type.name == 'logical':
-        return Atomic(bool(e1.value) >= bool(e2.value), types.LogicalType())
-    else:
-        raise Exception('invalid vector type - {}'.format(type.name))
-
-
-def atomic_is_less_or_greater(e1: Atomic, e2: Atomic):
-    ret = atomic_is_equal_or_greater(e2, e1)
-    return ret
-
-
-def cast_atomic(e: Atomic, type_name):
-    if e.get_type().name == type_name:
-        return e
-    elif type_name == 'character':
-        ret = Atomic(bool(e.value), types.CharacterType(), is_na=e.is_na, is_nan=e.is_nan, is_inf=e.is_inf,
-                     is_neg=e.is_neg)
-        return ret
-    elif type_name == 'double':
-        ret = Atomic(float(e.value), types.DoubleType(), is_na=e.is_na, is_nan=e.is_nan, is_inf=e.is_inf,
-                     is_neg=e.is_neg)
-        return ret
-    elif type_name == 'integer':
-        ret = Atomic(int(e.value), types.IntegerType(), is_na=e.is_na, is_nan=e.is_nan, is_inf=e.is_inf,
-                     is_neg=e.is_neg)
-        return ret
-    elif type_name == 'logical':
-        ret = Atomic(bool(e.value), types.LogicalType(), is_na=e.is_na, is_nan=e.is_nan, is_inf=e.is_inf,
-                     is_neg=e.is_neg)
-        return ret
-    else:
-        raise Exception('unsupported vector cast type - {}'.format(type_name))
-
 
 
 @RObj.register_r_obj
@@ -526,23 +317,20 @@ class AndAndFun(BuiltInFun):
 
     def compute(self, params: List[Param], env: Environment):
         args = self.arrange_args(params)
-        e1: Param = args['x']
-        e2: Param = args['y']
-        if e1.value.get_type().name not in ['double', 'logical', 'integer']:
+        e1 = args['x']
+        e2 = args['y']
+        if e1[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('x', 'x && y')
-        if e2.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e2[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('y', 'x && y')
-        res = []
-
         try:
-            for l, r in concat_vectors(e1.value.items, e2.value.items):
-                res.append(atomic_and(l.value, r.value))
+            res = perform_op_on_vector_or_atomic(e1[1], e2[1], atomic_and)
         except UnsupportedVectorType as e:
             raise errors.InvalidArgTypeInArgs('x' if e.operand_index == 0 else 'y', 'x && y')
 
         res = [VectorItem(None, el) for el in res]
 
-        ret = VectorObj(res)
+        ret = VectorObj.create(res)
         return ret
 
 
@@ -561,14 +349,16 @@ class AndFun(BuiltInFun):
         args = self.arrange_args(params)
         e1: VectorObj = args['x']
         e2: VectorObj = args['y']
-        if e1.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e1[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('x', 'x & y')
-        if e2.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e2[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('y', 'x & y')
-        res = VectorItem(None, atomic_and(e1.value.items[0].value, e2.value.items[0].value))
-        ret = VectorObj([res])
+        res = VectorItem(None, atomic_and(e1[1].items[0][1], e2[1].items[0][1]))
+        ret = VectorObj.create([res])
         return ret
 
+
+# TODO all above
 
 register_built_in_function(AndFun)
 
@@ -583,19 +373,19 @@ class OrOrFun(BuiltInFun):
 
     def compute(self, params: List[Param], env: Environment):
         args = self.arrange_args(params)
-        e1: Param = args['x']
-        e2: Param = args['y']
-        if e1.value.get_type().name not in ['double', 'logical', 'integer']:
+        e1 = args['x']
+        e2 = args['y']
+        if e1[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('x', 'x || y')
-        if e2.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e2[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('y', 'x || y')
-        res = []
-        for l, r in concat_vectors(e1.value.items, e2.value.items):
-            res.append(atomic_or(l.value, r.value))
+
+        res = perform_op_on_vector_or_atomic(e1[1], e2[1], lambda l, r: cast_atomic(atomic_power(l, r)))
+
 
         res = [VectorItem(None, el) for el in res]
 
-        ret = VectorObj(res)
+        ret = VectorObj.create(res)
         return ret
 
 
@@ -612,14 +402,14 @@ class OrFun(BuiltInFun):
 
     def compute(self, params: List[Param], env: Environment):
         args = self.arrange_args(params)
-        e1: Param = args['x']
-        e2: Param = args['y']
-        if e1.value.get_type().name not in ['double', 'logical', 'integer']:
+        e1 = args['x']
+        e2 = args['y']
+        if e1[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('x', 'x | y')
-        if e2.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e2[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('y', 'x | y')
-        res = VectorItem(None, atomic_or(e1.value.items[0].value, e2.value.items[0].value))
-        ret = VectorObj([res])
+        res = VectorItem(None, atomic_or(e1[1].items[0].value, e2[1].items[0].value))
+        ret = VectorObj.create([res])
         return ret
 
 
@@ -636,16 +426,22 @@ class NotFun(BuiltInFun):
 
     def compute(self, params: List[Param], env: Environment):
         args = self.arrange_args(params)
-        e1: Param = args['x']
-        if e1.value.get_type().name not in ['double', 'logical', 'integer']:
+        e1 = args['x']
+        if e1[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgType()
         res = []
-        for item in e1.value.items:
-            res.append(atomic_not(item.value))
+        if isinstance(e1, VectorObj):
+            if len(e1[1].items) == 0:
+                return VectorObj([], type(e1[1].get_type())())
+
+            for item in e1[1].items:
+                res.append(atomic_not(item[1]))
+        else:
+            res.append(atomic_not(e1[1]))
 
         res = [VectorItem(None, el) for el in res]
 
-        ret = VectorObj(res)
+        ret = VectorObj.create(res)
         return ret
 
 
@@ -662,33 +458,38 @@ class AddFun(BuiltInFun):
 
     def compute(self, params: List[Param], env: Environment):
         args = self.arrange_args(params)
-        e1: Param = args['e1']
-        e2: Param = args['e2']
+        e1 = args['e1']
+        e2 = args['e2']
 
         if isinstance(e2, EmptyParamObj):
             return e1.value
 
-        if e1.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e1[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('x', 'x + y')
-        if e2.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e2[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('y', 'x + y')
         res = []
 
         as_integer = False
 
-        if e1.value.get_type().name == 'integer' and e2.value.get_type().name == 'integer':
+        if e1[1].get_type().name == 'integer' and e2[1].get_type().name == 'integer':
             as_integer = True
-        elif e1.value.get_type().name == 'integer' and e2.value.get_type().name == 'logical':
+        elif e1[1].get_type().name == 'integer' and e2[1].get_type().name == 'logical':
             as_integer = True
-        elif e1.value.get_type().name == 'logical' and e2.value.get_type().name == 'integer':
+        elif e1[1].get_type().name == 'logical' and e2[1].get_type().name == 'integer':
             as_integer = True
 
-        for l, r in concat_vectors(e1.value.items, e2.value.items):
-            res.append(cast_atomic(atomic_add(l.value, r.value), 'integer' if as_integer else 'double'))
+        res = perform_op_on_vector_or_atomic(e1[1], e2[1],
+                                             lambda l, r: cast_atomic(atomic_add(l, r),
+                                                                      'integer' if as_integer else 'double'))
 
         res = [VectorItem(None, el) for el in res]
 
-        ret = VectorObj(res)
+        if len(res) == 0:
+            t = get_more_important_vector_type(e1[1].get_type(), e2[2].get_type())
+            return VectorObj([], t)
+
+        ret = VectorObj.create(res)
         return ret
 
 
@@ -705,15 +506,15 @@ class SubtractFun(BuiltInFun):
 
     def compute(self, params: List[Param], env: Environment):
         args = self.arrange_args(params)
-        e1: Param = args['e1']
-        e2: Param = args['e2']
+        e1 = args['e1']
+        e2 = args['e2']
 
         if isinstance(e2, EmptyParamObj):
-            if e1.value.get_type().name not in ['double', 'logical', 'integer']:
+            if e1[1].get_type().name not in ['double', 'logical', 'integer']:
                 raise errors.InvalidArgTypeInArgs('x', '- x')
 
             res = []
-            for item in e1.value.items:
+            for item in e1[1].items:
                 res.append(atomic_subtract(Atomic(False, types.LogicalType()), item.value))
 
             res = [VectorItem(None, el)
@@ -722,27 +523,31 @@ class SubtractFun(BuiltInFun):
             ret = VectorObj(res)
             return ret
 
-        if e1.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e1[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('x', 'x - y')
-        if e2.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e2[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('y', 'x - y')
-        res = []
 
         as_integer = False
 
-        if e1.value.get_type().name == 'integer' and e2.value.get_type().name == 'integer':
+        if e1[1].get_type().name == 'integer' and e2[1].get_type().name == 'integer':
             as_integer = True
-        elif e1.value.get_type().name == 'integer' and e2.value.get_type().name == 'logical':
+        elif e1[1].get_type().name == 'integer' and e2[1].get_type().name == 'logical':
             as_integer = True
-        elif e1.value.get_type().name == 'logical' and e2.value.get_type().name == 'integer':
+        elif e1[1].get_type().name == 'logical' and e2[1].get_type().name == 'integer':
             as_integer = True
 
-        for l, r in concat_vectors(e1.value.items, e2.value.items):
-            res.append(cast_atomic(atomic_subtract(l.value, r.value), 'integer' if as_integer else 'double'))
+        res = perform_op_on_vector_or_atomic(e1[1], e2[1],
+                                             lambda l, r: cast_atomic(atomic_subtract(l, r),
+                                                                      'integer' if as_integer else 'double'))
 
         res = [VectorItem(None, el) for el in res]
 
-        ret = VectorObj(res)
+        if len(res) == 0:
+            t = get_more_important_vector_type(e1[1].get_type(), e2[2].get_type())
+            return VectorObj([], t)
+
+        ret = VectorObj.create(res)
         return ret
 
 
@@ -759,30 +564,34 @@ class MultiplyFun(BuiltInFun):
 
     def compute(self, params: List[Param], env: Environment):
         args = self.arrange_args(params)
-        e1: Param = args['e1']
-        e2: Param = args['e2']
+        e1 = args['e1']
+        e2 = args['e2']
 
-        if e1.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e1[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('x', 'x * y')
-        if e2.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e2[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('y', 'x * y')
-        res = []
 
         as_integer = False
 
-        if e1.value.get_type().name == 'integer' and e2.value.get_type().name == 'integer':
+        if e1[1].get_type().name == 'integer' and e2[1].get_type().name == 'integer':
             as_integer = True
-        elif e1.value.get_type().name == 'integer' and e2.value.get_type().name == 'logical':
+        elif e1[1].get_type().name == 'integer' and e2[1].get_type().name == 'logical':
             as_integer = True
-        elif e1.value.get_type().name == 'logical' and e2.value.get_type().name == 'integer':
+        elif e1[1].get_type().name == 'logical' and e2[1].get_type().name == 'integer':
             as_integer = True
 
-        for l, r in concat_vectors(e1.value.items, e2.value.items):
-            res.append(cast_atomic(atomic_multiply(l.value, r.value), 'integer' if as_integer else 'double'))
+        res = perform_op_on_vector_or_atomic(e1[1], e2[1],
+                                             lambda l, r: cast_atomic(atomic_multiply(l, r),
+                                                                      'integer' if as_integer else 'double'))
 
         res = [VectorItem(None, el) for el in res]
 
-        ret = VectorObj(res)
+        if len(res) == 0:
+            t = get_more_important_vector_type(e1[1].get_type(), e2[2].get_type())
+            return VectorObj([], t)
+
+        ret = VectorObj.create(res)
         return ret
 
 
@@ -799,30 +608,34 @@ class DivideFun(BuiltInFun):
 
     def compute(self, params: List[Param], env: Environment):
         args = self.arrange_args(params)
-        e1: Param = args['e1']
-        e2: Param = args['e2']
+        e1 = args['e1']
+        e2 = args['e2']
 
-        if e1.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e1[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('x', 'x / y')
-        if e2.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e2[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('y', 'x / y')
-        res = []
 
         as_integer = False
 
-        if e1.value.get_type().name == 'integer' and e2.value.get_type().name == 'integer':
+        if e1[1].get_type().name == 'integer' and e2[1].get_type().name == 'integer':
             as_integer = True
-        elif e1.value.get_type().name == 'integer' and e2.value.get_type().name == 'logical':
+        elif e1[1].get_type().name == 'integer' and e2[1].get_type().name == 'logical':
             as_integer = True
-        elif e1.value.get_type().name == 'logical' and e2.value.get_type().name == 'integer':
+        elif e1[1].get_type().name == 'logical' and e2[1].get_type().name == 'integer':
             as_integer = True
 
-        for l, r in concat_vectors(e1.value.items, e2.value.items):
-            res.append(cast_atomic(atomic_divide(l.value, r.value), 'integer' if as_integer else 'double'))
+        res = perform_op_on_vector_or_atomic(e1[1], e2[1],
+                                             lambda l, r: cast_atomic(atomic_divide(l, r),
+                                                                      'integer' if as_integer else 'double'))
 
         res = [VectorItem(None, el) for el in res]
 
-        ret = VectorObj(res)
+        if len(res) == 0:
+            t = get_more_important_vector_type(e1[1].get_type(), e2[2].get_type())
+            return VectorObj([], t)
+
+        ret = VectorObj.create(res)
         return ret
 
 
@@ -833,36 +646,40 @@ register_built_in_function(DivideFun)
 class PowerFun(BuiltInFun):
     @staticmethod
     def create(*args):
-        name = '**'
+        name = '^'
         args = [Arg('e1', None), Arg('e2', None)]
         return PowerFun(name, args)
 
     def compute(self, params: List[Param], env: Environment):
         args = self.arrange_args(params)
-        e1: Param = args['e1']
-        e2: Param = args['e2']
+        e1 = args['e1']
+        e2 = args['e2']
 
-        if e1.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e1[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('x', 'x ** y')
-        if e2.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e2[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('y', 'x ** y')
-        res = []
 
         as_integer = False
 
-        if e1.value.get_type().name == 'integer' and e2.value.get_type().name == 'integer':
+        if e1[1].get_type().name == 'integer' and e2[1].get_type().name == 'integer':
             as_integer = True
-        elif e1.value.get_type().name == 'integer' and e2.value.get_type().name == 'logical':
+        elif e1[1].get_type().name == 'integer' and e2[1].get_type().name == 'logical':
             as_integer = True
-        elif e1.value.get_type().name == 'logical' and e2.value.get_type().name == 'integer':
+        elif e1[1].get_type().name == 'logical' and e2[1].get_type().name == 'integer':
             as_integer = True
 
-        for l, r in concat_vectors(e1.value.items, e2.value.items):
-            res.append(cast_atomic(atomic_power(l.value, r.value), 'integer' if as_integer else 'double'))
+        res = perform_op_on_vector_or_atomic(e1[1], e2[1],
+                                             lambda l, r: cast_atomic(atomic_power(l, r),
+                                                                      'integer' if as_integer else 'double'))
 
         res = [VectorItem(None, el) for el in res]
 
-        ret = VectorObj(res)
+        if len(res) == 0:
+            t = get_more_important_vector_type(e1[1].get_type(), e2[2].get_type())
+            return VectorObj([], t)
+
+        ret = VectorObj.create(res)
         return ret
 
 
@@ -883,27 +700,31 @@ class DivModFun(BuiltInFun):
         e1: Param = args['e1']
         e2: Param = args['e2']
 
-        if e1.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e1[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('x', 'x ** y')
-        if e2.value.get_type().name not in ['double', 'logical', 'integer']:
+        if e2[1].get_type().name not in ['double', 'logical', 'integer']:
             raise errors.InvalidArgTypeInArgs('y', 'x ** y')
-        res = []
 
         as_integer = False
 
-        if e1.value.get_type().name == 'integer' and e2.value.get_type().name == 'integer':
+        if e1[1].get_type().name == 'integer' and e2[1].get_type().name == 'integer':
             as_integer = True
-        elif e1.value.get_type().name == 'integer' and e2.value.get_type().name == 'logical':
+        elif e1[1].get_type().name == 'integer' and e2[1].get_type().name == 'logical':
             as_integer = True
-        elif e1.value.get_type().name == 'logical' and e2.value.get_type().name == 'integer':
+        elif e1[1].get_type().name == 'logical' and e2[1].get_type().name == 'integer':
             as_integer = True
 
-        for l, r in concat_vectors(e1.value.items, e2.value.items):
-            res.append(cast_atomic(atomic_mod(l.value, r.value), 'integer' if as_integer else 'double'))
+        res = perform_op_on_vector_or_atomic(e1[1], e2[1],
+                                             lambda l, r: cast_atomic(atomic_mod(l, r),
+                                                                      'integer' if as_integer else 'double'))
 
         res = [VectorItem(None, el) for el in res]
 
-        ret = VectorObj(res)
+        if len(res) == 0:
+            t = get_more_important_vector_type(e1[1].get_type(), e2[2].get_type())
+            return VectorObj([], t)
+
+        ret = VectorObj.create(res)
         return ret
 
 
@@ -923,9 +744,9 @@ class CatFun(BuiltInFun):
         e: DotsObj = args['...']
 
         for index, param in enumerate(e.items):
-            if param.value.get_type().name not in ['character', 'double', 'integer', 'logical']:
-                raise errors.ArgumentCannotBeHandledByFun(index+1, param.value.get_type().name, 'cat')
-            for atom in param.value.items:
+            if param[1].get_type().name not in ['character', 'double', 'integer', 'logical']:
+                raise errors.ArgumentCannotBeHandledByFun(index+1, param[1].get_type().name, 'cat')
+            for atom in param[1].items:
                 rep = atom.show_self()
                 print(rep)
 
@@ -933,6 +754,27 @@ class CatFun(BuiltInFun):
 
 
 register_built_in_function(CatFun)
+
+
+# @RObj.register_r_obj
+# class IsTrue(BuiltInFun):
+#
+#     @staticmethod
+#     def create(*args):
+#         name = 'isTRUE'
+#         args = [Arg('x', None)]
+#         return IsTrue(name, args)
+#
+#     def compute(self, params: List[Param], env: Environment):
+#         args = self.arrange_args(params)
+#         e: Param = args['e']
+#         itm: VectorObj = e.value
+#         res = itm.get_type().name == 'logical' and len(itm.items) == 1 \
+#               and not itm.items[0].value.is_nan and not itm.items[0].value.is_na
+#         return VectorObj.create([VectorItem(None, Atomic(res, types.LogicalType()))])
+
+
+# Arg('i', None), Arg('j', None), Arg('...', None)
 
 
 # class PlainAssignFun(FunctionObj):

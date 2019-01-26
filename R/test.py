@@ -1,5 +1,5 @@
-from R.RObj import RObj
 from R.Environment import Environment
+import R.RObj
 import R.BuiltIn as builtin
 from R.Function import FunctionObj, CallObj, Atomic, Arg
 import R.AtomicObjs as objs
@@ -56,7 +56,14 @@ print(res.show_self())
 
 print(res2.show_self())
 
-res3 = CallObj(objs.SymbolObj('**'), [res,res2]).compute(this_env)
+r1 = language.PowerObj(res, res2).evaluate(this_env)
+
+res3 = CallObj(objs.SymbolObj('^'), [res,res2]).compute(this_env)
+
+print('r1')
+print(r1.show_self())
+print(res2.show_self())
+print(res3.show_self())
 
 print(res3.show_self())
 
