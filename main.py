@@ -17,6 +17,8 @@ arr=['a', [2, 3, [['7']]], 9]
 # arr=[2, ['+', 3]]
 # arr=[2, '+', 3]
 
+print("09877665433")
+
 def extract_arr(tree):
     if not isinstance(tree, list):
         if tree:

@@ -19,6 +19,8 @@ def set_base(_base_obj):
 #             raise new_e
 #     return wrapper
 
+print("print")
+
 
 class NamedOption(object):
     def __init__(self, name, opt_value):
