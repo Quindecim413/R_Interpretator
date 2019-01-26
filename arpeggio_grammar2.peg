@@ -1,0 +1,81 @@
+Logical =           'TRUE' / 'FALSE'
+Numeric =           r'[0-9]*(\.[0-9]+)?'
+Integer =           r'[0-9]L'
+Complex =           Numeric 'i'
+Newline =           '\r\n' / '\n'
+Variable =          r'(([.]*[a-zA-Z]+)|([.]{2,}[\d]*)|([.]+[_]+))[a-zA-Z_\d.]*'
+Character =         r'("[^"\\]*(?:\\.[^"\\]*)*")' / r"('[^'\\]*(?:\\.[^'\\]*)*')"
+Dlr =               '$'
+Dots =              '...'
+Null =              'NULL'
+Na =                'NA'
+Nan =               'NaN'
+Inf =               'Inf'
+OrOp =              '||' / '|'
+AndOp =             '&&' / '&'
+NotOp =             '!'
+PlusMinOp =         '+' | '-'
+MultDivOp =         '*' / '/'
+UserOp =            r'%[^%]%'
+SeqOp =             ':'
+FactOp =            '^'
+CompOp =            '>' / '<' / '>=' / '<=' / '!=' / '=='
+
+
+start =                 simple_input* EOF
+
+simple_input =          delimiter / compound_stmt / simple_stmt
+inline_simple_input =   compound_stmt / simple_stmt
+
+delimiter =             (';' / Newline)+
+_ =                     Newline*
+
+
+simple_stmt =           flow_stmt / argument
+flow_stmt =             break_stmt / next_stmt
+break_stmt =            'break'
+next_stmt =             'next'
+
+compound_stmt =          repeat_stmt / for_stmt / while_stmt / funcdef / condition_stmt
+repeat_stmt =           'repeat' _ suite
+for_stmt =              'for' _ '(' _ Variable _ 'in' _ argument _ ')' suite
+while_stmt =            'while' _ '(' _ argument _ ')' suite
+condition_stmt =        if_case _ elif_case* _ else_case?
+if_case =               'if' _ '(' _ argument _ ')' suite
+elif_case =             'else' _ 'if' _ '(' _ argument _ ')' suite
+else_case =             'else' suite
+
+
+expr =                  or_expr
+or_expr =               and_expr ( OrOp _ and_expr)*
+and_expr =              not_expr( AndOp _ not_expr)*
+not_expr =              (NotOp _ not_expr / compare_expr)
+compare_expr =          arith_expr (CompOp _ arith_expr)?
+arith_expr =            term _ (PlusMinOp _ term)*
+term =                  special_term _ (MultDivOp _ special_term)*
+special_term =          sequence_term _ ( UserOp _ sequence_term)*
+sequence_term =         factor ( _ SeqOp _ factor)?
+factor =                (PlusMin _ factor ) /  power
+power =                 assign_item (_ FactOp _ factor)*
+
+
+assign_expr =           simple_assign / left_assign / right_assign
+simple_assign =         assign_item '=' _ expr_item
+left_assign =           assign_item ('<<-' / '<-' ) _ expr_item
+right_assign =          expr_item ('->' /'->>') _ assign_item
+assign_item =           atom (trailer)*
+atom =                 '(' _ argument _')' / Dots / Logical / Integer / Numeric /  Character / Null / Na / Nan / Inf / Variable
+
+
+trailer =               call / indexing / subname
+call =                  '(' (_ argument)? (_ ',' _ argument )* _')'
+indexing =              '[' _ argument (_ ',' _ argument )* _']'
+subname =               '$' Variable
+argument =              funcdef / assign_expr / expr
+
+expr_item =             funcdef / expr
+
+funcdef =               'function' _ '(' _ func_argument? (_',' _ func_argument)* _ (',' _ Dots _ )? ')' suite
+func_argument =         Variable ('=' expr_item)?
+suite =                 _ (('{' simple_input* '}') / inline_simple_input )
+

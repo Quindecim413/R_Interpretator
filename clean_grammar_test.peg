@@ -1,0 +1,89 @@
+start =                 list_of_inputs EOF
+list_of_inputs =        ( delimiter )* ( simple_input ( delimiter )+)*  simple_input?
+
+simple_input =          compound_stmt / simple_stmt / code_block
+
+delimiter =             ';' / '\n' / '\r\n'
+_ =                     Newline*
+
+
+simple_stmt =           flow_stmt / argument
+flow_stmt =             break_stmt / next_stmt
+break_stmt =            'break'
+next_stmt =             'next'
+
+compound_stmt =         repeat_stmt / for_stmt / while_stmt / funcdef / if_case
+repeat_stmt =           'repeat' _ suite
+for_stmt =              'for' _ '(' _ Variable _ 'in' _ argument _ ')' _ suite
+while_stmt =            'while' _ '(' _ argument _ ')' _ suite
+if_case =               'if' _ '(' _ argument _ ')' _ suite ( _ 'else' _ suite)?
+
+
+expr =                  or_expr
+or_expr =               and_expr ( OrOp _ and_expr)*
+and_expr =              not_expr( AndOp _ not_expr)*
+not_expr =              (NotOp _ not_expr / compare_expr)
+compare_expr =          arith_expr (CompOp _ arith_expr)?
+arith_expr =            term ( _ PlusMinOp _ term)*
+term =                  special_term ( _ MultDivOp _ special_term)*
+special_term =          sequence_term ( _ UserOp _ sequence_term)*
+sequence_term =         factor ( _ SeqOp _ factor)?
+factor =                (PlusMinOp _ factor ) /  power
+power =                 element (_ FactOp _ factor)*
+
+element =               atom (trailer)*
+
+assign_expr =           simple_assign / left_assign / right_assign
+simple_assign =         assign_item '=' _ expr_item
+left_assign =           assign_item ('<<-' / '<-' ) _ expr_item
+right_assign =          expr_item ('->' /'->>') _ assign_item
+assign_item =           element
+atom =                 '(' _ argument _')' / Dots / Logical / Integer / Numeric /  Character / Null / Na / Nan / Inf / Variable
+
+
+trailer =               call / indexing / list_indexing / subname
+call =                  '(' (_ argument (_ ',' _ argument )*)? _')'
+indexing =              '[' (_ argument (_ ',' _ argument )*)? _']'
+list_indexing =         '[[' _ argument? _ ']]'
+subname =               Dlr Variable
+argument =              funcdef / assign_expr / expr
+
+expr_item =             funcdef / expr / code_block
+
+code_block =            '{' list_of_inputs '}'
+
+funcdef =               'function' _ '(' _ func_params? _')' _ suite
+
+func_params =           optionals / ( Variable ( ',' _ Variable !( '=' ))* ( ',' _ optionals)? )
+
+optionals =             ( optional_param ( ',' _ optional_param)* ( ',' _ Dots )?)
+                        / Dots
+
+optional_param =        Variable '=' _ expr_item
+
+suite =                 ('{' list_of_inputs '}') / simple_input
+
+Comment =               r'#[^\n]*\n'
+
+Logical =               'TRUE' / 'FALSE'
+Numeric =               r'([0-9]*(\.[0-9]+))|([0-9]+(\.[0-9]+)?)'
+Integer =               r'[0-9]L'
+Complex =               Numeric 'i'
+Newline =               '\r\n' / '\n'
+Variable =              r'(([.]*[a-zA-Z]+)|([.]{2,}[\d]*)|([.]+[_]+))[a-zA-Z_\d.]*'
+Character =             r'("[^"\\]*(?:\\.[^"\\]*)*")' / r"('[^'\\]*(?:\\.[^'\\]*)*')"
+Dlr =                   '$'
+Dots =                  '...'
+Null =                  'NULL'
+Na =                    'NA'
+Nan =                   'NaN'
+Inf =                   'Inf'
+OrOp =                  '||' / '|'
+AndOp =                 '&&' / '&'
+NotOp =                 '!'
+PlusMinOp =             '+' / '-'
+MultDivOp =             '*' / '/'
+UserOp =                r'%[^%]%'
+SeqOp =                 ':'
+FactOp =                '^'
+CompOp =                '>' / '<' / '>=' / '<=' / '!=' / '=='

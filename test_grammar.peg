@@ -1,0 +1,15 @@
+start =         (expr '\n'* )*
+
+__ =            ( ' ' / '\t' / '\n' )*
+
+expr =          add_subtr / term
+
+add_subtr =     expr ( '+' / '-' ) term
+
+term =          mul_div / factor
+
+mul_div =       term ( '*' / '/' ) factor
+
+factor =        ( '(' expr ')' ) / num
+
+num =           ~r'[0-9]L'i

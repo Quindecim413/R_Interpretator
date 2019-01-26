@@ -1,0 +1,97 @@
+start =                 list_of_inputs
+list_of_inputs =        _ ( delimiter _ )* ( _ simple_input _ ( delimiter _ )+)*  _ simple_input? _
+
+simple_input =          compound_stmt / simple_stmt / code_block
+
+delimiter =             ';' / '\n' / '\r\n'
+_ =                     (' ' / '\t' / Comment)*
+__ =                    ( ' ' / '\t' / '\n' / '\r\n' / Comment)*
+
+
+simple_stmt =           flow_stmt / argument
+flow_stmt =             break_stmt / next_stmt
+break_stmt =            'break'
+next_stmt =             'next'
+
+compound_stmt =          repeat_stmt / for_stmt / while_stmt / funcdef / if_case
+repeat_stmt =           'repeat' __ suite
+for_stmt =              'for' __ '(' __ Variable __ 'in' __ argument __ ')' __ suite
+while_stmt =            'while' __ '(' __ argument __ ')' __ suite
+
+if_case =               'if' __ '(' __ argument __ ')' __ suite ( __ 'else' __ suite)?
+
+
+expr =                  or_expr
+or_expr =               and_expr ( _ OrOp __ and_expr )*
+and_expr =              not_expr ( _ AndOp __ not_expr )*
+not_expr =              ( NotOp __ not_expr) / compare_expr
+compare_expr =          arith_expr ( _ CompOp __ arith_expr)?
+arith_expr =            term ( _ PlusMinOp __ term)*
+term =                  special_term ( _ MultDivOp __ special_term )*
+special_term =          sequence_term ( _ UserOp __ sequence_term )*
+sequence_term =         factor ( _ SeqOp __ factor )?
+factor =                ( PlusMinOp __ factor ) / power
+power =                 element ( _ FactOp __ factor )*
+
+element =               atom (trailer)*
+
+assign_expr =           simple_assign / left_assign / right_assign
+simple_assign =         element _ '=' __ expr_item
+left_assign =           element _ (SuperLeftAssignOp / SimpleLeftAssignOp ) __ expr_item
+right_assign =          expr_item _ (SuperRightAssignOp /SimpleRightAssignOp) __ element
+atom =                  ( '(' __ argument __')' ) / Dots / Logical / Integer / Numeric /  Character / Null / Na / Nan / Inf / Variable
+
+trailer =               call / indexing / list_indexing / subname
+call =                  '(' __ (argument ( __ ',' __ argument )*)? __ ')'
+indexing =              '[' __ (argument ( __ ',' __ argument )*)? __ ']'
+list_indexing =         '[[' __ argument? __ ']]'
+subname =               Dlr Variable
+argument =              funcdef / assign_expr / expr / code_block
+
+expr_item =             funcdef / expr / code_block
+
+code_block =            '{' list_of_inputs '}'
+
+funcdef =               'function' __ '(' __ func_params? __')' __ suite
+
+func_params =           ( optional_param / element ) (_',' __ ( optional_param / element ))*
+
+
+optionals =             ( optional_param (_',' __ optional_param)* ( _ ',' __ Dots )?)
+                        / Dots
+
+optional_param =        element _ '=' __ expr_item
+
+
+suite =                 ('{' list_of_inputs '}') / simple_input
+
+Comment =           ~r'#[^\n]*\n'i
+
+Logical =           'TRUE' / 'FALSE'
+Numeric =           ~r'([0-9]*(\.[0-9]+))|([0-9]+(\.[0-9]+)?)'i
+Integer =           ~r'[0-9]L'i
+Complex =           Numeric 'i'
+Variable =          ~r'(([.]*[a-zA-Z]+)|([.]{2,}[\d]*)|([.]+[_]+))[a-zA-Z_\d.]*'
+Character =         ( ~r'("[^"\\]*(?:\\.[^"\\]*)*")'i ) / ( ~r"('[^'\\]*(?:\\.[^'\\]*)*')"i )
+
+SimpleLeftAssignOp = '<-'
+SuperLeftAssignOp = '<<-'
+SimpleRightAssignOp = '->'
+SuperRightAssignOp = '->>'
+
+
+Dlr =               '$'
+Dots =              '...'
+Null =              'NULL'
+Na =                'NA'
+Nan =               'NaN'
+Inf =               'Inf'
+OrOp =              '||' / '|'
+AndOp =             '&&' / '&'
+NotOp =             '!'
+PlusMinOp =         '+' / '-'
+MultDivOp =         '*' / '/'
+UserOp =            ~r'%[^%]%'i
+SeqOp =             ':'
+FactOp =            '^'
+CompOp =            '>' / '<' / '>=' / '<=' / '!=' / '=='
