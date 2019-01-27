@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file '/Users/balagnese/Desktop/form6.ui'
+# Form implementation generated from reading ui file '/Users/balagnese/Desktop/form7.ui'
 #
 # Created by: PyQt5 UI code generator 5.10.1
 #
@@ -27,30 +27,27 @@ class Ui_QWidget(QWidget):
         self.gridLayout.setObjectName("gridLayout")
         self.exec_code_label = QtWidgets.QLabel(self.groupBox)
         self.exec_code_label.setObjectName("exec_code_label")
-        self.gridLayout.addWidget(self.exec_code_label, 3, 0, 1, 1)
+        self.gridLayout.addWidget(self.exec_code_label, 4, 0, 1, 1)
         self.var_text = QtWidgets.QTextEdit(self.groupBox)
         self.var_text.setObjectName("var_text")
         self.var_text.setReadOnly(True)
-        self.gridLayout.addWidget(self.var_text, 6, 1, 1, 1)
+        self.gridLayout.addWidget(self.var_text, 7, 1, 1, 1)
         self.ast_label = QtWidgets.QLabel(self.groupBox)
         self.ast_label.setObjectName("ast_label")
-        self.gridLayout.addWidget(self.ast_label, 3, 1, 1, 1)
+        self.gridLayout.addWidget(self.ast_label, 4, 1, 1, 1)
         self.code_label = QtWidgets.QLabel(self.groupBox)
         self.code_label.setObjectName("code_label")
-        self.gridLayout.addWidget(self.code_label, 5, 0, 1, 1)
+        self.gridLayout.addWidget(self.code_label, 6, 0, 1, 1)
         self.exec_code_text = QtWidgets.QTextEdit(self.groupBox)
-        self.exec_code_text.setReadOnly(True)
         self.exec_code_text.setObjectName("exec_code_text")
-        self.gridLayout.addWidget(self.exec_code_text, 4, 0, 1, 1)
+        self.exec_code_text.setReadOnly(True)
+        self.gridLayout.addWidget(self.exec_code_text, 5, 0, 1, 1)
         self.var_label = QtWidgets.QLabel(self.groupBox)
         self.var_label.setObjectName("var_label")
-        self.gridLayout.addWidget(self.var_label, 5, 1, 1, 1)
+        self.gridLayout.addWidget(self.var_label, 6, 1, 1, 1)
         self.code_text = QtWidgets.QTextEdit(self.groupBox)
         self.code_text.setObjectName("code_text")
-        self.gridLayout.addWidget(self.code_text, 6, 0, 1, 1)
-        self.file_button = QtWidgets.QPushButton(self.groupBox)
-        self.file_button.setObjectName("file_button")
-        self.gridLayout.addWidget(self.file_button, 0, 1, 1, 1)
+        self.gridLayout.addWidget(self.code_text, 7, 0, 1, 1)
         self.code_button = QtWidgets.QPushButton(self.groupBox)
         self.code_button.setEnabled(True)
         self.code_button.setObjectName("code_button")
@@ -58,10 +55,16 @@ class Ui_QWidget(QWidget):
         self.ast_text = QtWidgets.QTextEdit(self.groupBox)
         self.ast_text.setObjectName("ast_text")
         self.ast_text.setReadOnly(True)
-        self.gridLayout.addWidget(self.ast_text, 4, 1, 1, 1)
+        self.gridLayout.addWidget(self.ast_text, 5, 1, 1, 1)
+        self.file_button = QtWidgets.QPushButton(self.groupBox)
+        self.file_button.setObjectName("file_button")
+        self.gridLayout.addWidget(self.file_button, 0, 1, 1, 1)
+        self.save_button = QtWidgets.QPushButton(self.groupBox)
+        self.save_button.setObjectName("save_button")
+        self.gridLayout.addWidget(self.save_button, 1, 1, 1, 1)
         self.clean_button = QtWidgets.QPushButton(self.groupBox)
         self.clean_button.setObjectName("clean_button")
-        self.gridLayout.addWidget(self.clean_button, 2, 1, 1, 1)
+        self.gridLayout.addWidget(self.clean_button, 1, 0, 1, 1)
         self.horizontalLayout.addWidget(self.groupBox)
         QWidget.setCentralWidget(self.centralwidget)
 
@@ -76,15 +79,17 @@ class Ui_QWidget(QWidget):
         self.code_label.setText(_translate("QWidget", "Пишите код"))
         self.var_label.setText(_translate("QWidget", "Переменные"))
 
-        self.file_button.setText(_translate("QWidget", "Загрузить из файла"))
-        self.file_button.clicked.connect(self.FileButtonClicked)
-
         self.code_button.setText(_translate("QWidget", "Выполнить код"))
         self.code_button.clicked.connect(self.CodeButtonClicked)
 
+        self.file_button.setText(_translate("QWidget", "Загрузить из файла"))
+        self.file_button.clicked.connect(self.FileButtonClicked)
+
+        self.save_button.setText(_translate("QWidget", "Сохранить в файл"))
+        self.save_button.clicked.connect(self.SaveButtonClicked)
+
         self.clean_button.setText(_translate("QWidget", "Очистить"))
         self.clean_button.clicked.connect(self.CleanButtonClicked)
-
 
     def FileButtonClicked(self):
         print("FileButtonClicked")
@@ -108,10 +113,21 @@ class Ui_QWidget(QWidget):
 
     def CleanButtonClicked(self):
         print("CleanButtonClicked")
-        self.ast_text.setText("")
-        self.code_text.setText("")
-        self.var_text.setText("")
-        self.exec_code_text.setText("")
+        # self.ast_text.setText("")
+        # self.code_text.setText("")
+        # self.var_text.setText("")
+        # self.exec_code_text.setText("")
+
+    def SaveButtonClicked(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        fileName, _ = QFileDialog.getSaveFileName(self, "QFileDialog.getSaveFileName()", "",
+                                                  "All Files (*);;R Files (*.r)", options=options)
+        if fileName:
+            print(fileName)
+            text = self.code_text.toPlainText()
+            with open(fileName, 'w') as f:
+                f.write(text)
 
 
 if __name__ == "__main__":
