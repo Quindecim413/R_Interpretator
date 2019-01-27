@@ -1,5 +1,5 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QInputDialog, QLineEdit, QWidget, QFileDialog
+from PyQt5.QtWidgets import QInputDialog, QLineEdit, QWidget
 import sys
 import os
 from parsimonious.grammar import Grammar
@@ -7,11 +7,11 @@ import visitor
 from node_rules import *
 
 
-class Ui_QWidget(QWidget):
-    def setupUi(self, QWidget):
-        QWidget.setObjectName("QWidget")
-        QWidget.resize(800, 768)
-        self.centralwidget = QtWidgets.QWidget(QWidget)
+class Ui_MainWindow(object):
+    def setupUi(self, MainWindow):
+        MainWindow.setObjectName("MainWindow")
+        MainWindow.resize(800, 768)
+        self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.horizontalLayout_2 = QtWidgets.QHBoxLayout(self.centralwidget)
         self.horizontalLayout_2.setObjectName("horizontalLayout_2")
@@ -71,48 +71,46 @@ class Ui_QWidget(QWidget):
         self.verticalLayout_2.addWidget(self.code_button)
         self.verticalLayout_3.addWidget(self.groupBox_4)
         self.horizontalLayout_2.addWidget(self.groupBox_2)
-        QWidget.setCentralWidget(self.centralwidget)
+        MainWindow.setCentralWidget(self.centralwidget)
 
-        self.retranslateUi(QWidget)
-        QtCore.QMetaObject.connectSlotsByName(QWidget)
+        self.retranslateUi(MainWindow)
+        QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
-    def retranslateUi(self, QWidget):
+    def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        QWidget.setWindowTitle(_translate("QWidget", "QWidget"))
+        MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
 
-        self.ast_button.setText(_translate("QWidget", "AST дерево"))
+        self.ast_button.setText(_translate("MainWindow", "AST дерево"))
         self.ast_button.clicked.connect(self.AstButtonClicked)
 
-        self.var_button.setText(_translate("QWidget", "Переменные"))
+        self.var_button.setText(_translate("MainWindow", "Переменные"))
         self.var_button.clicked.connect(self.VarButtonClicked)
 
-        self.clean_button.setText(_translate("QWidget", "Очистить"))
+        self.clean_button.setText(_translate("MainWindow", "Очистить"))
         self.clean_button.clicked.connect(self.CleanButtonClicked)
 
-        self.file_button.setText(_translate("QWidget", "Загрузить из файла"))
+        self.file_button.setText(_translate("MainWindow", "Загрузить из файла"))
         self.file_button.clicked.connect(self.FileButtonClicked)
 
-        self.code_button.setText(_translate("QWidget", "Выполнить код"))
+        self.code_button.setText(_translate("MainWindow", "Выполнить код"))
         self.code_button.clicked.connect(self.CodeButtonClicked)
 
     def FileButtonClicked(self):
         print("FileButtonClicked")
-        options = QFileDialog.Options()
-        options |= QFileDialog.DontUseNativeDialog
-        fileName, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "",
-                                                  "All Files (*);;R Files (*.r)", options=options)
-        if fileName:
-            print(fileName)
-            text = open(fileName).read()
-            self.code_text.setText(text)
+        QInputDialog.getText(self, "", "")
+        # text, okPressed = QInputDialog.getText(QWidget, 'Text Input Dialog', 'Enter your name:')
+        # if okPressed and text != '':
+        #     print(text)
 
     def CodeButtonClicked(self):
         print("CodeButtonClicked")
+        self.var_ast_text.setText("asdfghjk")
+        self.tree_text.setText("qqqqqqqqq")
         # inp = open('test.r').read()
         inp = self.code_text.toPlainText()
         parse_tree = grammar.parse(inp)
         v = Start.create(None, visitor.Visitor().visit(parse_tree), parse_tree.start, parse_tree.end)
-        self.tree_text.setText(str(v))
+        self.var_ast_text.setText(str(v))
 
     def CleanButtonClicked(self):
         print("CleanButtonClicked")
@@ -131,7 +129,7 @@ if __name__ == "__main__":
     fls = list(sorted([f for f in os.listdir('.') if not f.startswith('.')]))
     app = QtWidgets.QApplication(sys.argv)
     MainWindow = QtWidgets.QMainWindow()
-    ui = Ui_QWidget()
+    ui = Ui_MainWindow()
     ui.setupUi(MainWindow)
     MainWindow.show()
 
@@ -139,4 +137,3 @@ if __name__ == "__main__":
     grammar = Grammar(gr)
 
     sys.exit(app.exec_())
-
