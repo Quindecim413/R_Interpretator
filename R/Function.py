@@ -1,14 +1,16 @@
 from R.Environment import Environment, ReturnCommand
+from R.NonRObjs import VectorItem
 from R.RObj import RObj, Param, Arg, RError
-from typing import List, Tuple, Dict
+from typing import List, Dict, Tuple
 import R.Types as types
 import R.RuntimeErrors as errors
 from abc import abstractmethod
-from R.AtomicObjs import DotsObj, Atomic, SymbolObj, EmptyParamObj, VectorItem, VectorObj
+from R.AtomicObjs import DotsObj, EmptyParamObj, VectorObj
+from R.Atomics import Atomic
 
 
-def func_args_arrange(fun_params: List[Param], fun_args: List[Arg]) -> Dict[str, RObj]:
-    args_res = {arg.name: arg.value for arg in fun_args}
+def func_args_arrange(fun_params: List[Tuple], fun_args: List[Tuple]) -> Dict[str, RObj]:
+    args_res = {arg[0]: arg[1] for arg in fun_args}
 
     assign_type = RObj.get_r_obj('AssignObj')
 
@@ -36,7 +38,7 @@ def func_args_arrange(fun_params: List[Param], fun_args: List[Arg]) -> Dict[str,
 
     dots_items = []
 
-    has_dots_obj = len(list(filter(lambda arg: arg.name == '...', fun_args))) != 0
+    has_dots_obj = len(list(filter(lambda arg: arg[0] == '...', fun_args))) != 0
 
     for name, obj in named_params.items():
         if name not in args_res:
@@ -79,7 +81,28 @@ class FunctionObj(RObj):
         self.body = body
 
     def show_self(self):
-        pass
+        args = []
+        for arg in self.input_args:
+            arg_val = arg.name + ((' = {}'.format(arg.value.show_self())) if arg.value is not None else '')
+            args.append(arg_val)
+        body_val = self.body.show_self()
+        args_val = ', '.join(args)
+        ret = 'function (' + args_val + ')' + \
+              (body_val if isinstance(self.body, RObj.get_r_obj('SuiteObj'))
+               else ' {}'.format(body_val))
+        return ret
+
+    def show_self_for_print(self, *args, **kwargs):
+        args = []
+        for arg in self.input_args:
+            arg_val = arg.name + ((' = {}'.format(arg.value.show_self())) if arg.value is not None else '')
+            args.append(arg_val)
+        body_val = self.body.show_self()
+        args_val = ', '.join(args)
+        ret = 'function (' + args_val + ')' + \
+              (body_val if isinstance(self.body, RObj.get_r_obj('SuiteObj'))
+               else ' {}'.format(body_val)) + '\n<bytecode: {}>'.format(id(self))
+        return ret
 
     # объект call создает список аргументов и передает их сюда
     @staticmethod
@@ -112,16 +135,24 @@ class FunctionObj(RObj):
             ret = e.get_value()
             return ret
 
+
 @RObj.register_r_obj
 class CallObj(RObj):
     def __init__(self, base_obj, items: List[RObj]):
         super(CallObj, self).__init__(types.LanguageType())
-        self.base_obj = base_obj
-        self.items = items
-
+        self.base_obj: RObj = base_obj
+        self.items: List[RObj] = items
 
     def show_self(self):
-        pass
+        base_val = self.base_obj.show_self()
+        itms = []
+        for item in self.items:
+            val_item = item.show_self()
+            itms.append(val_item)
+        ret = base_val + '(' + ', '.join(itms) + ')'
+        return ret
+
+    show_self_for_print = show_self
 
     @staticmethod
     def create(base_obj, items: List[RObj]):
@@ -158,7 +189,7 @@ class CallObj(RObj):
                         name = item.item.name
                     elif isinstance(item.item, Atomic):
                         if item.item.get_type().name == 'character':
-                            name = item.item.value
+                            name = item.item[0]
                         else:
                             raise errors.InvalidLeftHandAssignment()
                     else:

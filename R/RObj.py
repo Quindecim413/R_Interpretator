@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from R.Environment import Environment
 from typing import List
-import  R.Utils as utils
+from R.NonRObjs import *
 import R.RuntimeErrors as errors
 import R.Types as types
 
@@ -76,10 +76,17 @@ class RObj(object):
             return 'function'
 
     @abstractmethod
-    def show_self(self):
+    def show_self(self, *args, **kwargs):
         raise NotImplementedError("{} should implement show_self() method".format(type(self).__name__))
 
-    def get_sub(self, key, options: List[utils.NamedOption]):
+    @abstractmethod
+    def show_self_for_print(self, *args, **kwargs):
+        raise NotImplementedError("{} should implement show_self_for_print() method".format(type(self).__name__))
+
+    def get_items(self):
+        raise errors.ObjectNotSubSettable(self)
+
+    def get_sub(self, key, options: List[Param]):
         raise errors.ObjectNotSubSettable(self)
 
     def set_sub(self, key, value):
@@ -88,7 +95,7 @@ class RObj(object):
     def get_super_sub(self, key):
         raise errors.ObjectNotSubSettable(self)
 
-    def set_super_sub(self, key,  options: List[utils.NamedOption]):
+    def set_super_sub(self, key,  options: List[Param]):
         raise errors.ObjectNotSubSettable(self)
 
     def get_dlr(self, key):
@@ -105,31 +112,4 @@ class RObj(object):
     def evaluate(self, env: Environment):
         raise NotImplementedError("{} should implement evaluate() method".format(type(self).__name__))
 
-
-
-
-
-class Arg(object):
-    def __init__(self, name, value):
-        if not name:
-            raise Exception('Arg name should always be set')
-        self.name = name
-        if value is not None:
-            if not isinstance(value, RObj):
-                raise Exception('Arg accepts only RObj value. Got {}'.format(value))
-
-        self.value: RObj = value
-
-class Param(object):
-    def __init__(self, name, value):
-        self.name = name
-        if value is None:
-            raise Exception('Param value should always be set')
-        if not isinstance(value, RObj):
-            raise Exception('Param accepts only RObj value. Got {}'.format(value))
-
-        self.value: RObj = value
-
-
-
-utils.set_base(RObj)
+set_RObj(RObj)

@@ -1,6 +1,7 @@
-from typing import List
-import R.Utils as utils
+from typing import List, Tuple
+import R.Atomics as utils
 from R.Environment import Environment
+from R.NonRObjs import VectorItem, ListItem
 from R.RObj import RObj
 import R.Types as types
 import R.RuntimeErrors as errors
@@ -8,54 +9,8 @@ from R.RObj import Param
 
 
 @RObj.register_r_obj
-class Atomic(RObj):
-    def show_self(self):
-        if self.is_na:
-            i = 'NA'
-        elif self.is_nan:
-            i = 'NaN'
-        elif self.is_inf:
-            if self.is_neg:
-                i = '-Inf'
-            else:
-                i = 'Inf'
-        elif self.get_type().name == 'logical':
-            i = 'TRUE' if self.value else 'FALSE'
-        else:
-            i = ('-' if self.is_neg else '') + str(self.value)
-        return i
-
-    def evaluate(self, env: Environment):
-        return self
-
-    def __init__(self, value, type: types.BaseType, is_na=False, is_nan=False, is_inf=False, is_neg=False):
-        if is_na and is_nan:
-            raise Exception("Atomic can be NA and NaN at the same time")
-        if (is_na or is_nan) and (is_inf):
-            raise Exception('invalid Atomic initialization - is_na={}, is_nan={}, is_inf={}, is_neg={}'
-                            .format(is_na, is_nan, is_inf, is_neg))
-        super(Atomic, self).__init__(type)
-        self.value = value
-        self.type: types.BaseType = type
-        self.is_na = is_na
-        self.is_nan = is_nan
-        self.is_inf = is_inf
-        self.is_neg = is_neg
-
-
-    @staticmethod
-    def create(value, type: types.BaseType, is_na=False, is_nan=False, is_inf=False, is_neg=False):
-
-        if type.name not in ['double', 'integer', 'logical', 'character', 'NULL', 'NA']:
-            raise Exception('Invalid atomic initialization type - {}'.format(type.name))
-
-        atom = Atomic(value, type, is_na=is_na, is_nan=is_nan, is_inf=is_inf, is_neg=is_neg)
-        return atom
-
-
-@RObj.register_r_obj
 class EmptyParamObj(RObj):
-    def show_self(self):
+    def show_self(self, *args, **kwargs):
         pass
 
     def create(self, *args, **kwargs):
@@ -91,8 +46,10 @@ class NULLObj(RObj):
     def __init__(self):
         super(NULLObj, self).__init__(types.NULLType())
 
-    def show_self(self):
+    def show_self(self, *args, **kwargs):
         return 'NULL'
+
+    show_self_for_print = show_self
 
     def create(self, *args, **kwargs):
         pass
@@ -103,12 +60,14 @@ class NULLObj(RObj):
 
 @RObj.register_r_obj
 class DotsObj(RObj):
-    def __init__(self, items: List[Param]):
+    def __init__(self, items: List[Tuple]):
         super(DotsObj, self).__init__(types.NoType())
-        self.items: List[Param] = items
+        self.items: List[Tuple] = items
 
-    def show_self(self):
-        pass
+    def show_self(self, *args, **kwargs):
+        return '...'
+
+    show_self_for_print = show_self
 
     @staticmethod
     def create(items: List[Param]):
@@ -118,30 +77,32 @@ class DotsObj(RObj):
         return self
 
 
-
-
-
-class VectorItem(object):
-    def __init__(self, name, value: Atomic):
-        self.name = name if name is not None else ''
-        if not isinstance(value, Atomic):
-            raise Exception('VectorItem accepts only Atomic value. Got {}'.format(value))
-        self.value: Atomic = value
-
 @RObj.register_r_obj
 class VectorObj(RObj):
     def evaluate(self, env: Environment):
         return self
 
-    def show_self(self):
+    def show_self(self, *args, **kwargs):
+        if len(self.items) == 0:
+            if self.get_type().name == 'character':
+                return 'character(0)'
+            elif self.get_type().name == 'double':
+                return 'numeric(0)'
+            elif self.get_type().name == 'integer':
+                return 'integer(0)'
+            elif self.get_type().name == 'logical':
+                return 'logical(0)'
+            else:
+                raise Exception('vector was initialized with improper type - {}'.format(self.get_type().name))
+
         headers = []
         itms = []
         headers_empty = True
         for item in self.items:
-            h = str(item.name)
+            h = str(item[0])
             headers_empty = headers_empty and not h
 
-            i = item.value.show_self()
+            i = item[1].show_self()
 
             len_h = len(h)
             len_i = len(i)
@@ -154,37 +115,30 @@ class VectorObj(RObj):
         if headers_empty:
             res = '\t'.join(itms)
         else:
-            res = '\n'.join(['    '.join(headers), '    '.join(itms)])
+            res = '\n'.join(['\t'.join(headers), '\t'.join(itms)])
         return res
 
-    def __init__(self, items: List[VectorItem]):
-        super(VectorObj, self).__init__(type(items[0].value.type)())
-        self.items: List[VectorItem] = items
+    show_self_for_print = show_self
+
+    def __init__(self, items: List[VectorItem], type: types.BaseType):
+        super(VectorObj, self).__init__(type)
+        self.items: List[Tuple] = items
 
 
     @staticmethod
     def create(items: List[VectorItem]):
         if len(items) == 0:
             return RObj.get_r_obj('NULLObj')()
-        return VectorObj(items)
-    # def evaluate(self, env: Environment):
-    #     o = []
-    #     for obj in self.objs:
-    #         if isinstance(obj, Atomic):
-    #             o.append(obj)
-    #         if isinstance(obj, RObj.get_r_obj('DotsObj')):
-    #             items: List[] = obj.get_items()
+        return VectorObj(items, type(items[0][1].type)())
+
+    def get_items(self):
+        res = []
+        for item in self.items:
+            res.append(VectorObj([item]))
+        return res
 
     def get_sub(self, key, options: List[utils.NamedOption]):
         pass
-
-
-class ListItem(object):
-    def __init__(self, name, value: RObj):
-        self.name = name if name is not None else ''
-        if not isinstance(value, RObj):
-            raise Exception('ListItem accepts only RObj value. Got {}'.format(value))
-        self.value: RObj = value
 
 
 @RObj.register_r_obj
@@ -192,15 +146,37 @@ class ListObj(RObj):
     def evaluate(self, env: Environment):
         return self
 
-    def show_self(self):
-        pass
+    def show_self(self, *args, **kwargs):
+        if len(self.items) == 0:
+            return 'list()'
+        ret = self._show_from_depth()
+        return ret
+
+    def _show_from_depth(self, base_header=''):
+        out = []
+        for index, item in enumerate(self.items):
+            header = base_header + ('$' + item[0] if item[0] else '[[{}]]'.format(index + 1))
+            if item.value.get_type().name == 'list':
+                res = item[1]._show_from_depth(header)
+                out.append(header+'\n'+res)
+            else:
+                res = item[1].show_self()
+                out.append(header+'\n'+res)
+
+        ret = '\n'.join(out)
+        return ret
+
+    show_self_for_print = show_self
 
     def __init__(self, items):
         super(ListObj, self).__init__(types.ListType())
-        self._items = items
+        self.items: List[Tuple] = items
 
     def create(self, items: List[ListItem]):
         return ListObj(items)
+
+    def get_items(self):
+        return self.items
 
 
 @RObj.register_r_obj
@@ -217,5 +193,7 @@ class SymbolObj(RObj):
         ret = env.find_object(self.name)
         return ret
 
-    def show_self(self):
-        pass
+    def show_self(self, *args, **kwargs):
+        return str(self.name)
+
+    show_self_for_print = show_self
