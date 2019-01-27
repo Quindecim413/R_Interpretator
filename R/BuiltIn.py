@@ -935,6 +935,14 @@ class CatFun(BuiltInFun):
 register_built_in_function(CatFun)
 
 
+@RObj.register_r_obj
+class IndexingFun(BuiltInFun):
+    @staticmethod
+    def create(*args):
+        name = '['
+        args = [Arg('...', None)]
+
+
 # class PlainAssignFun(FunctionObj):
 #
 #     def compute(self, params: List[RObj], env: Environment):
