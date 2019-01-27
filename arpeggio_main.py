@@ -183,9 +183,9 @@ class Visitor(PTNodeVisitor):
         ret = element.create(None, extract_arr(children), node.position, node.position_end)
         return ret
 
-    def visit_assign_expr(self, node, children):
-        ret =  assign_expr.create(None, extract_arr(children), node.position, node.position_end)
-        return ret
+    # def visit_assign_expr(self, node, children):
+    #     ret =  assign_expr.create(None, extract_arr(children), node.position, node.position_end)
+    #     return ret
 
     def visit_simple_assign(self, node, children):
         ret =  simple_assign.create(None, extract_arr(children), node.position, node.position_end)

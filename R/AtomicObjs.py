@@ -82,6 +82,19 @@ class VectorObj(RObj):
     def evaluate(self, env: Environment):
         return self
 
+    def get_default_class(self):
+        if self.get_type().name == 'character':
+            ret = 'character'
+        elif self.get_type().name == 'double':
+            ret = 'numeric'
+        elif self.get_type().name == 'integer':
+            ret = 'integer'
+        elif self.get_type().name == 'logical':
+            ret = 'logical'
+        else:
+            raise Exception('vector was initialized with improper type - {}'.format(self.get_type().name))
+        return RObj.get_r_obj('Atomic')(ret, types.CharacterType())
+
     def show_self(self, *args, **kwargs):
         if len(self.items) == 0:
             if self.get_type().name == 'character':
@@ -124,7 +137,6 @@ class VectorObj(RObj):
         super(VectorObj, self).__init__(type)
         self.items: List[Tuple] = items
 
-
     @staticmethod
     def create(items: List[VectorItem]):
         if len(items) == 0:
@@ -145,6 +157,9 @@ class VectorObj(RObj):
 class ListObj(RObj):
     def evaluate(self, env: Environment):
         return self
+
+    def get_default_class(self):
+        return RObj.get_r_obj('Atomic')('list', types.CharacterType())
 
     def show_self(self, *args, **kwargs):
         if len(self.items) == 0:
@@ -172,7 +187,8 @@ class ListObj(RObj):
         super(ListObj, self).__init__(types.ListType())
         self.items: List[Tuple] = items
 
-    def create(self, items: List[ListItem]):
+    @staticmethod
+    def create(items: List[Tuple]):
         return ListObj(items)
 
     def get_items(self):
@@ -181,9 +197,15 @@ class ListObj(RObj):
 
 @RObj.register_r_obj
 class SymbolObj(RObj):
+    def get_default_class(self):
+        pass
+
     def __init__(self, name):
         super(SymbolObj, self).__init__(types.SymbolType())
         self.name = name
+
+    def get_default_class(self):
+        return RObj.get_r_obj('Atomic')('symbol', types.CharacterType())
 
     @staticmethod
     def create(name):

@@ -5,19 +5,23 @@ _global_env_ = None
 
 
 class CommandException(Exception):
-    pass
+    def __init__(self, not_catched_message):
+        self.message = not_catched_message
 
 
 class BreakLoopCommand(CommandException):
-    pass
+    def __init__(self):
+        super(BreakLoopCommand, self).__init__('no loop for break/next, jumping to top level')
 
 
 class NextLoopCommand(CommandException):
-    pass
+    def __init__(self):
+        super(NextLoopCommand, self).__init__('no loop for break/next, jumping to top level')
 
 
 class ReturnCommand(CommandException):
     def __init__(self, returned_value):
+        super(ReturnCommand, self).__init__('no function to return from, jumping to top level')
         self._returned_value = returned_value
 
     def get_value(self):
@@ -29,6 +33,10 @@ class FailToFindFunction(Exception):
 
 
 class Environment(object):
+    @staticmethod
+    def standart_output(message):
+        print(message)
+
     _global_env = None
     @property
     def global_env(self):
@@ -61,20 +69,32 @@ class Environment(object):
             raise errors.ObjectNotFound(name)
         return self.parent_env.find_object(name)
 
+    def find_object_locally(self, name):
+        if name in self.__container__:
+            return self.__container__[name]
+        raise errors.ObjectNotFound(name)
+
     def find_function(self, func_name: str, classes_names: List=[]):
+        try:
+            res = self._find_function(func_name, classes_names)
+            return res
+        except FailToFindFunction:
+            raise errors.FailedToFindFunction(func_name)
+
+    def _find_function(self, func_name, classes_names=[]):
         if func_name.endswith('.default'):
             name = func_name.split('.default')[0]
             try:
                 fun = self._find_function_for_class(name)
                 return fun
             except FailToFindFunction:
-                raise errors.FailedToFindFunction(func_name)
+                raise FailToFindFunction()
         elif len(classes_names) == 0:
             try:
                 fun = self._find_function_for_class(func_name)
                 return fun
             except FailToFindFunction:
-                raise errors.FailedToFindFunction(func_name)
+                raise FailToFindFunction()
         else:
             for cls_name in classes_names:
                 try:
@@ -87,31 +107,19 @@ class Environment(object):
                     fun = self._find_function_for_class(func_name)
                     return fun
                 except FailToFindFunction:
-                    raise errors.FailedToFindFunction(func_name)
-
-
-        # if func_name in self.__container__:
-        #     r = self.__container__[func_name]
-        #     if r.get_type().name not in ['closure', 'builtin']:
-        #         if self.parent_env is None:
-        #             raise errors.FailedToFindFunction(func_name)
-        #         return self.parent_env.find_function(func_name)
-        #     return r
-        # if self.parent_env is None:
-        #     raise errors.FailedToFindFunction(func_name)
-        # return self.parent_env.find_function(func_name)
+                    raise FailToFindFunction()
 
     def _find_function_for_class(self, func_name):
         if func_name in self.__container__:
             r = self.__container__[func_name]
             if r.get_type().name not in ['closure', 'builtin']:
                 if self.parent_env is None:
-                    raise errors.FailedToFindFunction(func_name)
-                return self.parent_env.find_function(func_name)
+                    raise FailToFindFunction()
+                return self.parent_env._find_function(func_name)
             return r
         if self.parent_env is None:
-            raise errors.FailedToFindFunction(func_name)
-        return self.parent_env.find_function(func_name)
+            raise FailToFindFunction()
+        return self.parent_env._find_function(func_name)
 
     def emit_exception(self, e):
         raise e

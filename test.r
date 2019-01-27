@@ -1,12 +1,17 @@
 #     -------1-------
 +7
 
+2|5|6||9
+
+
+abc(1, 3)
+
 a[2,o]
 
 a$f[c(2, 4)]
 a<<-7
 b.->5
-while(a(function(x, ...,z=2, ..., k=function() print(6), y = sum(c(2:call(12))-4)) x < 2)) print(a)
+while(a(function(x, ...,z=2, ..., k1=function() print(6), y = sum(c(2:call(12))-4)) x < 2)) print(a)
 
 repeat{
 b
@@ -22,12 +27,12 @@ function(x, y=2) {
 }
 
 { if(c) call(20)
-k=0;7-5.6->l}
+k2=0;7-5.6->l}
 
 
 #     -------2-------
 
-while(a(function(x, z=2, k=function() print(6), y = sum(c(2:call(12))-4)) x < 2))  print(a)
+while(a(function(x, z=2, p=function() print(6), y = sum(c(2:call(12))-4)) x < 2))  print(a)
 
 repeat{
 b
@@ -42,13 +47,13 @@ s = function(x, y=2) {
 }
 
 { if(c) call(20)
-k=0;7-5.6->l}
+k4=0;7-5.6->l}
 # afakjsgfjkhzsbgmbjgb smm()a sfa0
 break ;  ; ; ; ;; ;  ; ; ; next
 
 for(el in c[][[a[4][list(1:c(6))]]]) { print(+-a)}
 
-a(function(t, z=2, k=4, y = sum(26)) x<2 )
+a(function(t, z=2, k5=4, y = sum(26)) x<2 )
 
 a$r
 

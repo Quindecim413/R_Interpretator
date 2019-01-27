@@ -1,6 +1,6 @@
 from R.Environment import Environment, ReturnCommand
 from R.NonRObjs import VectorItem
-from R.RObj import RObj, Param, Arg, RError
+from R.RObj import RObj, Param, Arg, RError, execute_item
 from typing import List, Dict, Tuple
 import R.Types as types
 import R.RuntimeErrors as errors
@@ -68,10 +68,19 @@ def func_args_arrange(fun_params: List[Tuple], fun_args: List[Tuple]) -> Dict[st
                 else:
                     param = unset_params[i]
                     i = i + 1
-                    res[arg_name] = param[1]
+                    res[arg_name] = param[1][1]
 
     return res
 
+
+def arrange_params_with_function_args(params, func, env: Environment):
+    res = func_args_arrange(params, func.input_args)
+    new_env: Environment = Environment(env)
+
+    for name, val in res.items():
+        new_env.add(name, val)
+
+    return new_env
 
 @RObj.register_r_obj
 class FunctionObj(RObj):
@@ -80,10 +89,13 @@ class FunctionObj(RObj):
         self.input_args: List[Arg] = input_args
         self.body = body
 
+    def get_default_class(self):
+        return RObj.get_r_obj('Atomic')('function', types.CharacterType())
+
     def show_self(self):
         args = []
         for arg in self.input_args:
-            arg_val = arg.name + ((' = {}'.format(arg.value.show_self())) if arg.value is not None else '')
+            arg_val = arg[0] + ((' = {}'.format(arg[1].show_self())) if arg[1] is not None else '')
             args.append(arg_val)
         body_val = self.body.show_self()
         args_val = ', '.join(args)
@@ -106,15 +118,26 @@ class FunctionObj(RObj):
 
     # объект call создает список аргументов и передает их сюда
     @staticmethod
-    def create(input_args: List[Arg]):
-        return FunctionObj(input_args)
+    def create(input_args: List, body: RObj):
+        args = []
+        for arg in input_args:
+            if isinstance(arg, RObj.get_r_obj('SymbolObj')):
+                a = Arg(arg.name, None)
+            elif isinstance(arg, RObj.get_r_obj('AssignObj')):
+                if not isinstance(arg.item, RObj.get_r_obj('SymbolObj')):
+                    raise errors.R_RuntimeError('invalid assigment of function')
+                else:
+                    a = Arg(arg.item.name, arg.value)
+            args.append(a)
+
+        return FunctionObj(args, body)
 
     def evaluate(self, env: Environment):
         return self
 
-    def arrange_args(self, params: List[Param]):
-        ret = func_args_arrange(params, self.input_args)
-        return ret
+    # def arrange_args(self, params: List[Param]):
+    #     ret = func_args_arrange(params, self.input_args)
+    #     return ret
 
     @staticmethod
     def create_new_environment(initialized_args: Dict[str, RObj], env: Environment):
@@ -125,26 +148,45 @@ class FunctionObj(RObj):
         return new_env
 
     @abstractmethod
-    def compute(self, params: List[Param], env: Environment):
-        inited_args = self.arrange_args(params)
-        new_env: Environment = self.create_new_environment(inited_args)
+    def compute(self, env: Environment):
+        # inited_args = self.arrange_args(params)
+        # new_env: Environment = self.create_new_environment(inited_args)
         try:
-            ret = self.body.evaluate(new_env)
+            ret = execute_item(self.body, env)
             return ret
         except ReturnCommand as e:
             ret = e.get_value()
             return ret
 
+    # @abstractmethod
+    # def compute(self, params: List[Param], env: Environment):
+    #     inited_args = self.arrange_args(params)
+    #     new_env: Environment = self.create_new_environment(inited_args)
+    #     try:
+    #         ret = self.body.evaluate(new_env)
+    #         return ret
+    #     except ReturnCommand as e:
+    #         ret = e.get_value()
+    #         return ret
+
 
 @RObj.register_r_obj
 class CallObj(RObj):
+    def get_default_class(self):
+        return RObj.get_r_obj('Atomic')('call', types.CharacterType())
+
     def __init__(self, base_obj, items: List[RObj]):
         super(CallObj, self).__init__(types.LanguageType())
         self.base_obj: RObj = base_obj
         self.items: List[RObj] = items
+        self.as_from_lang = False
 
     def show_self(self):
         base_val = self.base_obj.show_self()
+
+        if self.as_from_lang:
+            return base_val
+
         itms = []
         for item in self.items:
             val_item = item.show_self()
@@ -156,17 +198,34 @@ class CallObj(RObj):
 
     @staticmethod
     def create(base_obj, items: List[RObj]):
-        return CallObj(base_obj, items)
+        ret = CallObj(base_obj, items)
+        return ret
 
-    def evaluate(self, env: Environment):
-        return self
+    @staticmethod
+    def create_from_lang_obj(lang_obj: RObj):
+        ret = CallObj(lang_obj, [])
+        ret.as_from_lang = True
+        return ret
+
+    # def evaluate(self, env: Environment):
+    #     return self
 
     def exception_occurred(self, e: RError):
         pass
 
-    def compute(self, env: Environment):
+    def evaluate(self, env: Environment):
+        if self.as_from_lang:
+            try:
+                return self.base_obj.compute(env)
+            except errors.R_RuntimeError as e:
+                r = RError.create_simple(self, e.message)
+                if not self.exception_occurred(r):
+                    raise r
+
         if self.base_obj.get_type().name == 'symbol':
             fun: FunctionObj = env.find_function(self.base_obj.name)
+            if not isinstance(fun, FunctionObj):
+                raise RError.create_simple(self, errors.ApplyToNonFunction().message)
         else:
             fun: FunctionObj = self.base_obj.evaluate(env)
             if not isinstance(fun, FunctionObj):
@@ -177,39 +236,129 @@ class CallObj(RObj):
         assg_obj = RObj.get_r_obj('AssignObj')
 
         for item in self.items:
-            # item_val = item.evaluate(env)
             if isinstance(item, DotsObj):
                 args.extend(item.items)
             elif isinstance(item, Atomic):
                 n = VectorObj.create([VectorItem(None, item)])
                 args.append(Param(None, n))
             elif isinstance(item, assg_obj):
-                if item.mode == 'plain':
-                    if item.item.get_type().name == 'symbol':
-                        name = item.item.name
-                    elif isinstance(item.item, Atomic):
-                        if item.item.get_type().name == 'character':
-                            name = item.item[0]
-                        else:
-                            raise errors.InvalidLeftHandAssignment()
+                if item.item.get_type().name == 'symbol':
+                    name = item.item.name
+                elif isinstance(item.item, Atomic):
+                    if item.item.get_type().name == 'character':
+                        name = item.item[0]
                     else:
-                        raise errors.InvalidLeftHandAssignment()
-                    arg = Param(name, item.value.evaluate(env))
-                    args.append(arg)
+                        raise RError.create_simple(self, errors.InvalidLeftHandAssignment().message)
                 else:
-                    arg = Param(None, item.evaluate(env))
-                    args.append(arg)
+                    raise RError.create_simple(self, errors.InvalidLeftHandAssignment().message)
+                arg = Param(name, item.value.evaluate(env))
+                args.append(arg)
             else:
                 arg = Param(None, item.evaluate(env))
                 args.append(arg)
+            #     if item.mode == 'plain':
+            #         if item.item.get_type().name == 'symbol':
+            #             name = item.item.name
+            #         elif isinstance(item.item, Atomic):
+            #             if item.item.get_type().name == 'character':
+            #                 name = item.item[0]
+            #             else:
+            #                 raise errors.InvalidLeftHandAssignment()
+            #         else:
+            #             raise errors.InvalidLeftHandAssignment()
+            #         arg = Param(name, item.value.evaluate(env))
+            #         args.append(arg)
+            #     else:
+            #         arg = Param(None, item.evaluate(env))
+            #         args.append(arg)
+            # else:
+            #     arg = Param(None, item.evaluate(env))
+            #     args.append(arg)
 
         try:
-            ret = fun.compute(args, env)
+            res = func_args_arrange(args, fun.input_args)
+            new_env: Environment = Environment(env)
+            for name, val in res.items():
+                new_env.add(name, val)
+            ret = fun.compute(new_env)
+            return ret
         except errors.R_RuntimeError as e:
-            r = RError(self, e.message)
+            r = RError.create_simple(self, e.message)
             if not self.exception_occurred(r):
                 raise r
-        return ret
 
+
+# @RObj.register_r_obj
+# class LanguageCallObj(RObj):
+#     def get_default_class(self):
+#         return RObj.get_r_obj('Atomic')('call', types.CharacterType())
+#
+#     def __init__(self, lang_obj):
+#         super(LanguageCallObj, self).__init__(types.LanguageType())
+#         self.lang_obj: RObj = lang_obj
+#
+#     def show_self(self):
+#         obj_val = self.lang_obj.show_self()
+#         return obj_val
+#
+#     show_self_for_print = show_self
+#
+#     @staticmethod
+#     def create(lang_obj: RObj):
+#         return LanguageCallObj(lang_obj)
+#
+#     def evaluate(self, env: Environment):
+#         return self
+#
+#     def exception_occurred(self, e: RError):
+#         pass
+#
+#     def compute(self, env: Environment):
+#         return self.lang_obj.compute(env)
+        # if self.base_obj.get_type().name == 'symbol':
+        #     fun: FunctionObj = env.find_function(self.base_obj.name)
+        # else:
+        #     fun: FunctionObj = self.base_obj.evaluate(env)
+        #     if not isinstance(fun, FunctionObj):
+        #         raise errors.ApplyToNonFunction()
+        #
+        # args = []
+        #
+        # assg_obj = RObj.get_r_obj('AssignObj')
+        #
+        # for item in self.items:
+        #     # item_val = item.evaluate(env)
+        #     if isinstance(item, DotsObj):
+        #         args.extend(item.items)
+        #     elif isinstance(item, Atomic):
+        #         n = VectorObj.create([VectorItem(None, item)])
+        #         args.append(Param(None, n))
+        #     elif isinstance(item, assg_obj):
+        #         if item.mode == 'plain':
+        #             if item.item.get_type().name == 'symbol':
+        #                 name = item.item.name
+        #             elif isinstance(item.item, Atomic):
+        #                 if item.item.get_type().name == 'character':
+        #                     name = item.item[0]
+        #                 else:
+        #                     raise errors.InvalidLeftHandAssignment()
+        #             else:
+        #                 raise errors.InvalidLeftHandAssignment()
+        #             arg = Param(name, item.value.evaluate(env))
+        #             args.append(arg)
+        #         else:
+        #             arg = Param(None, item.evaluate(env))
+        #             args.append(arg)
+        #     else:
+        #         arg = Param(None, item.evaluate(env))
+        #         args.append(arg)
+        #
+        # try:
+        #     ret = fun.compute(args, env)
+        # except errors.R_RuntimeError as e:
+        #     r = RError.create_simple(self, e.message)
+        #     if not self.exception_occurred(r):
+        #         raise r
+        # return ret
 
 

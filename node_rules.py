@@ -1,6 +1,22 @@
 from parse_tree_visitor import ASTNode
 
+from R.Environment import Environment
+import R.RObj
+import R.BuiltIn as builtin
+from R.Function import FunctionObj, CallObj, Atomic, Arg
+import R.AtomicObjs as atomics
+import R.Types as types
+import R.LanguageObjs as language
+import R.Function as func
+import R.RuntimeErrors as errors
+
 Verbose = True
+
+
+class OperandNotSupportedYet(Exception):
+    def __init__(self, desc):
+        super(Exception, self).__init__(desc)
+
 
 class Start(ASTNode):
     def __init__(self, children, start, end):
@@ -19,8 +35,12 @@ class Start(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return Start(children, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        res = []
+        for child in self.children:
+            r = child.evaluate()
+            res.append(r)
+        return res
 
 class list_of_inputs(ASTNode):
     @classmethod
@@ -52,8 +72,12 @@ class suite(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return suite(children, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        res = []
+        for child in self.children:
+            r = child.evaluate()
+            res.append(r)
+        return language.SuiteObj.create(res)
 
 class break_stmt(ASTNode):
     def __repr__(self, level=0):
@@ -67,8 +91,8 @@ class break_stmt(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return break_stmt('break', start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        return language.BreakObj.create()
 
 class next_stmt(ASTNode):
     def __repr__(self, level=0):
@@ -82,8 +106,8 @@ class next_stmt(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return next_stmt('next', start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        return language.NextObj.create()
 
 class compound_stmt(ASTNode):
     @classmethod
@@ -92,7 +116,7 @@ class compound_stmt(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return children[0]
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 class repeat_stmt(ASTNode):
@@ -112,8 +136,10 @@ class repeat_stmt(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return repeat_stmt(children[0], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        res_body = self.body.evaluate()
+        return language.RepeatLoopObj.create(res_body)
+
 
 
 class for_stmt(ASTNode):
@@ -137,8 +163,11 @@ class for_stmt(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return for_stmt(children[0], children[1], children[2], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_var = self.variable.evaluate()
+        val_arg = self.argument.evaluate()
+        val_body = self.body.evaluate()
+        return language.ForLoopObj.create(val_var, val_arg, val_body)
 
 class while_stmt(ASTNode):
     def __init__(self, _argument, body, start, end):
@@ -159,8 +188,10 @@ class while_stmt(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return while_stmt(children[0], children[1], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_arg = self.argument.evaluate()
+        val_body = self.body.evaluate()
+        return language.WhileObj.create(val_arg, val_body)
 
 class if_stmt(ASTNode):
     def __init__(self, condition, body, alterbody, start, end):
@@ -183,26 +214,31 @@ class if_stmt(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return if_stmt(children[0], children[1], children[2] if len(children) > 2 else None, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_arg = self.condition.evaluate()
+        val_body = self.body.evaluate()
+        val_alterbody = self.alterbody.evaluate() if self.alterbody is not None else None
+        return language.IfElseObj.create(val_arg, val_body, val_alterbody)
 
-class EmptyASTNode(ASTNode):
-    def __init__(self):
-        super().__init__('empty', 0, 0)
 
-    def __repr__(self, level=0):
-        return ' ' * level+'block\n' + ' '*(level + 1) + '--//--'
 
-    __str__ = __repr__
-
-    @classmethod
-    def create(cls, value, children, start, end):
-        if not Verbose:
-            print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
-        return None
-
-    def evaluate(self, env):
-        return None
+# class EmptyASTNode(ASTNode):
+#     def __init__(self):
+#         super().__init__('empty', 0, 0)
+#
+#     def __repr__(self, level=0):
+#         return ' ' * level+'block\n' + ' '*(level + 1) + '--//--'
+#
+#     __str__ = __repr__
+#
+#     @classmethod
+#     def create(cls, value, children, start, end):
+#         if not Verbose:
+#             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
+#         return None
+#
+#     def evaluate(self):
+#         raise OperandNotSupportedYet('EmptyAstNode')
 
 # class condition_stmt(ASTNode):
 #     def __init__(self, if_else_clause, start, end):
@@ -238,14 +274,21 @@ class EmptyASTNode(ASTNode):
 #         pass
 
 class or_expr(ASTNode):
-    def __init__(self, children, start, end):
-        self.children = children
+    def __init__(self, left, right, or_op, start, end):
         super().__init__('or_expr', start, end)
 
+        self.or_op = or_op
+        if len(left) == 1:
+            self.left = left[0]
+        else:
+            self.left = or_expr(left[:-2], left[len(left) - 1], left[len(left) - 2], start, end)
+        self.right = right
+
     def __repr__(self, level=0):
-        chn = [ch.__repr__(level + 1) for ch in self.children]
-        chn = '\n'.join(chn)
-        ret = ' ' * level + 'or\n' + chn
+        l = self.left.__repr__(level + 2)
+        r = self.right.__repr__(level + 2)
+        ret = ' ' * level + str(self.or_op) + '\n' + ' ' * (level + 1) + 'left\n' + l + \
+              '\n' + ' ' * (level + 1) + 'right\n' + r
         return ret
 
     __str__ = __repr__
@@ -254,24 +297,36 @@ class or_expr(ASTNode):
     def create(cls, value, children, start, end):
         if not Verbose:
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
-        if len(children) > 1:
-            return or_expr(children[0::2], start, end)
-        else:
+        if len(children) == 1:
             return children[0]
+        return or_expr(children[:-2], children[len(children) - 1], children[len(children) - 2], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_left = self.left.evaluate()
+        val_right = self.right.evaluate()
+
+        if self.or_op.value == '||':
+            return language.OrOrObj.create(val_left, val_right)
+        else:
+            return language.OrObj.create(val_left, val_right)
 
 
 class and_expr(ASTNode):
-    def __init__(self, children, start, end):
-        self.children = children
+    def __init__(self, left, right, and_op, start, end):
         super().__init__('and_expr', start, end)
 
+        self.and_op = and_op
+        if len(left) == 1:
+            self.left = left[0]
+        else:
+            self.left = and_expr(left[:-2], left[len(left) - 1], left[len(left) - 2], start, end)
+        self.right = right
+
     def __repr__(self, level=0):
-        chn = [ch.__repr__(level + 1) for ch in self.children]
-        chn = '\n'.join(chn)
-        ret = ' ' * level + 'and\n' + chn
+        l = self.left.__repr__(level + 2)
+        r = self.right.__repr__(level + 2)
+        ret = ' ' * level + str(self.and_op) + '\n' + ' ' * (level + 1) + 'left\n' + l + \
+              '\n' + ' ' * (level + 1) + 'right\n' + r
         return ret
 
     __str__ = __repr__
@@ -280,13 +335,18 @@ class and_expr(ASTNode):
     def create(cls, value, children, start, end):
         if not Verbose:
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
-        if len(children) > 1:
-            return and_expr(children[0::2], start, end)
-        else:
+        if len(children) == 1:
             return children[0]
+        return and_expr(children[:-2], children[len(children) - 1], children[len(children) - 2], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_left = self.left.evaluate()
+        val_right = self.right.evaluate()
+
+        if self.and_op.value == '&&':
+            return language.AndAndObj.create(val_left, val_right)
+        else:
+            return language.AndObj.create(val_left, val_right)
 
 
 class not_expr(ASTNode):
@@ -308,16 +368,14 @@ class not_expr(ASTNode):
             return children[0]
         return not_expr(children[1], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val = self.negating_expr.evaluate()
+        return language.NotObj.create(val)
 
 class compare_expr(ASTNode):
     def __init__(self, left, right, comp_op, start, end):
         self.compare_op = comp_op
-        if len(left) == 1:
-            self.left = left[0]
-        else:
-            self.left = compare_expr(left[:-2], left[len(left)-1], left[len(left)-2], start, end)
+        self.left = left
         self.right = right
         super().__init__('compare_expr', start, end)
 
@@ -336,10 +394,27 @@ class compare_expr(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         if len(children) == 1:
             return children[0]
-        return compare_expr(children[:-2], children[len(children)-1], children[len(children)-2], start, end)
+        return compare_expr(children[0], children[2], children[1], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+
+        val_left = self.left.evaluate()
+        val_right = self.right.evaluate()
+
+        if self.compare_op.value == '==':
+            return language.EqualObj.create(val_left, val_right)
+        elif self.compare_op.value == '!=':
+            return language.NotEqualObj.create(val_left, val_right)
+        elif self.compare_op.value == '<':
+            return language.LessObj.create(val_left, val_right)
+        elif self.compare_op.value == '<=':
+            return language.LessOrEqualObj.create(val_left, val_right)
+        elif self.compare_op.value == '>':
+            return language.GreaterObj.create(val_left, val_right)
+        elif self.compare_op.value == '>=':
+            return language.GreaterOrEqualObj.create(val_left, val_right)
+        else:
+            raise Exception('invalid compare_op value - {}'.format(self.compare_op.value))
 
 
 class arith_expr(ASTNode):
@@ -364,29 +439,35 @@ class arith_expr(ASTNode):
     @classmethod
     def create(cls, value, children, start, end):
         if not Verbose:
-            print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
+            print('creating ast node with ' + str(cls.__name__) + 'with children: ' + str(children))
         if len(children) == 1:
             return children[0]
         return arith_expr(children[:-2], children[len(children) - 1], children[len(children) - 2], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_left = self.left.evaluate()
+        val_right = self.right.evaluate()
+
+        if self.arith_op.value == '+':
+            return language.AddObj.create(val_left, val_right)
+        else:
+            return language.SubtractObj.create(val_left, val_right)
 
 
 class term(ASTNode):
-    def __init__(self, left, right, arith_op, start, end):
-        self.arith_op = arith_op
+    def __init__(self, left, right, term_op, start, end):
+        self.term_op = term_op
         if len(left) == 1:
-            self.left = left
+            self.left = left[0]
         else:
-            self.left = arith_expr(left[:-2], left[len(left)-1], left[len(left)-2], start, end)
+            self.left = term(left[:-2], left[len(left)-1], left[len(left)-2], start, end)
         self.right = right
         super().__init__('term', start, end)
 
     def __repr__(self, level=0):
         l = self.left.__repr__(level + 2)
         r = self.right.__repr__(level + 2)
-        ret = ' ' * level + str(self.arith_op) + '\n' + ' ' * (level + 1) + 'left\n' + l + \
+        ret = ' ' * level + str(self.term_op) + '\n' + ' ' * (level + 1) + 'left\n' + l + \
               '\n' + ' ' * (level + 1) + 'right\n' + r
         return ret
 
@@ -400,17 +481,23 @@ class term(ASTNode):
             return children[0]
         return term(children[:-2], children[len(children) - 1], children[len(children) - 2], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_left = self.left.evaluate()
+        val_right = self.right.evaluate()
+
+        if self.term_op.value == '*':
+            return language.MultiplyObj.create(val_left, val_right)
+        else:
+            return language.DivideObj.create(val_left, val_right)
 
 
 class special_term(ASTNode):
     def __init__(self, left, right, user_op, start, end):
         self.user_op = user_op
         if len(left) == 1:
-            self.left = left
+            self.left = left[0]
         else:
-            self.left = arith_expr(left[:-2], left[len(left)-1], left[len(left)-2], start, end)
+            self.left = special_term(left[:-2], left[len(left)-1], left[len(left)-2], start, end)
         self.right = right
         super().__init__('special_term', start, end)
 
@@ -431,8 +518,11 @@ class special_term(ASTNode):
             return children[0]
         return special_term(children[:-2], children[len(children) - 1], children[len(children) - 2], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_left = self.left.evaluate()
+        val_right = self.right.evaluate()
+
+        return language.SpecialObj.create(val_left, val_right, self.user_op.value)
 
 
 class sequence_term(ASTNode):
@@ -458,8 +548,11 @@ class sequence_term(ASTNode):
             return children[0]
         return sequence_term(children[0], children[2], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_left = self.left.evaluate()
+        val_right = self.right.evaluate()
+
+        return language.SequenceObj.create(val_left, val_right)
 
 
 class factor(ASTNode):
@@ -483,8 +576,13 @@ class factor(ASTNode):
             return children[0]
         return factor(children[0], children[1], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_child = self.child.evaluate()
+
+        if self.plus_min_op.value == '+':
+            return language.AddUnaryObj.create(val_child)
+        else:
+            return language.SubtractUnaryObj.create(val_child)
 
 
 class power(ASTNode):
@@ -514,8 +612,11 @@ class power(ASTNode):
             return children[0]
         return power(children[:-2], children[len(children) - 1], children[len(children) - 2], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_left = self.left.evaluate()
+        val_right = self.right.evaluate()
+
+        return language.PowerObj.create(val_left, val_right)
 
 class element(ASTNode):
     def __init__(self, item, _trailer, start, end):
@@ -544,7 +645,7 @@ class element(ASTNode):
 
         return item.item
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 class simple_assign(ASTNode):
@@ -568,8 +669,11 @@ class simple_assign(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return simple_assign(children[0], children[1], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_left = self.left.evaluate()
+        val_right = self.right.evaluate()
+
+        return language.AssignObj.create(val_left, val_right)
 
 class super_left_assign(ASTNode):
     def __init__(self, left, right, start, end):
@@ -590,8 +694,11 @@ class super_left_assign(ASTNode):
     def create(cls, value, children, start, end):
         pass
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_left = self.left.evaluate()
+        val_right = self.right.evaluate()
+
+        return language.SuperAssignObj.create(val_left, val_right)
 
 
 class left_assign(ASTNode):
@@ -617,8 +724,11 @@ class left_assign(ASTNode):
             return left_assign(children[0], children[2], start, end)
         return super_left_assign(children[0], children[2], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_left = self.left.evaluate()
+        val_right = self.right.evaluate()
+
+        return language.SimpleAssignObj.create(val_left, val_right)
 
 
 class right_assign(ASTNode):
@@ -628,7 +738,7 @@ class right_assign(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return left_assign(children[2], children[0], start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 class call(ASTNode):
@@ -654,8 +764,16 @@ class call(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return call(children, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_item = self.item.evaluate()
+
+        vals_args = []
+        for arg in self.arguments:
+            r = arg.evaluate()
+            vals_args.append(r)
+
+        return func.CallObj.create(val_item, vals_args)
+
 
 
 class indexing(ASTNode):
@@ -681,8 +799,15 @@ class indexing(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return indexing(children, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_item = self.item.evaluate()
+
+        vals_args = []
+        for arg in self.arguments:
+            r = arg.evaluate()
+            vals_args.append(r)
+
+        return language.IndexingObj.create(val_item, vals_args)
 
 
 class list_indexing(ASTNode):
@@ -706,8 +831,13 @@ class list_indexing(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return list_indexing(children[0] if len(children) > 0 else None, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_item = self.item.evaluate()
+
+        val_arg = self.argument.evaluate()
+
+        return language.SuperIndexingObj.create(val_item, val_arg)
+
 
 class subname(ASTNode):
     def __init__(self, variable, start, end):
@@ -728,8 +858,13 @@ class subname(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return subname(children[1], start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        val_item = self.item.evaluate()
+
+        val_var = self.variable.evaluate()
+
+        return language.DLRObj.create(val_item, val_var)
+
 
 class code_block(ASTNode):
     def __init__(self, children, start, end):
@@ -749,18 +884,22 @@ class code_block(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return code_block(children, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        res = []
+        for child in self.children:
+            r = child.evaluate()
+            res.append(r)
+        return language.SuiteObj.create(res)
+
 
 class funcdef(ASTNode):
-    def __init__(self, arguments, dots, body, start, end):
+    def __init__(self, arguments, body, start, end):
         self.arguments = arguments
-        self.dots = dots
         self.body = body
         super().__init__('func_def', start, end)
 
     def __repr__(self, level=0):
-        chn = [ch.__repr__(level+2) for ch in [*(self.arguments), self.dots] if ch]
+        chn = [ch.__repr__(level+2) for ch in self.arguments if ch]
         ret = ' '*level + 'func_def\n' + \
               ' '*(level+1) + 'arguments\n' + '\n'.join(chn) + \
               '\n' + ' '*(level + 1) + 'body\n' + self.body.__repr__(level+2)
@@ -772,14 +911,18 @@ class funcdef(ASTNode):
     def create(cls,  value, children, start, end):
         if not Verbose:
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
-        if len(children) > 1:
-            if children[len(children)-1].name == 'dots':
-                return funcdef(children[:-2], children[len(children)-2], children[len(children)-1])
+        return funcdef(children[:-1], children[len(children)-1], start, end)
 
-        return funcdef(children[:-1], None, children[len(children)-1], start, end)
+    def evaluate(self):
+        args = []
+        for arg in self.arguments:
+            r = arg.evaluate()
+            args.append(r)
 
-    def evaluate(self, env):
-        pass
+        val_body = self.body.evaluate()
+
+        return func.FunctionObj.create(args, val_body)
+
 
 class optional_param(ASTNode):
     @classmethod
@@ -788,7 +931,7 @@ class optional_param(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return simple_assign.create(value, children, start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 
@@ -809,8 +952,8 @@ class Logical(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return Logical(value, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        return language.Atomic.create(True if self.value == 'TRUE' else False, types.LogicalType())
 
 class Numeric(ASTNode):
     def __init__(self, value, start, end):
@@ -828,8 +971,8 @@ class Numeric(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return Numeric(value, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        return language.Atomic.create(float(self.value), types.DoubleType())
 
 class Integer(ASTNode):
     def __init__(self, value, start, end):
@@ -847,8 +990,8 @@ class Integer(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return Integer(value, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        return language.Atomic.create(int(self.value[:-1]), types.IntegerType())
 
 class Complex(ASTNode):
     def __init__(self, value, start, end):
@@ -866,8 +1009,8 @@ class Complex(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return Complex(value, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        raise OperandNotSupportedYet()
 
 class Variable(ASTNode):
     def __init__(self, var_name, start, end):
@@ -885,9 +1028,9 @@ class Variable(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return Variable(value, start, end)
 
-    def evaluate(self, env):
-        # здесь извлекаем значение переменной из окружения
-        pass
+    def evaluate(self):
+        return atomics.SymbolObj.create(self.var_name)
+
 
 class Character(ASTNode):
     def __init__(self, value, start, end):
@@ -905,8 +1048,9 @@ class Character(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return Character(value, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        return language.Atomic.create(self.value, types.CharacterType())
+
 
 class SimpleLeftAssignOp(ASTNode):
     def __init__(self, start, end):
@@ -923,7 +1067,7 @@ class SimpleLeftAssignOp(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return SimpleLeftAssignOp(start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 
@@ -942,7 +1086,7 @@ class SuperLeftAssignOp(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return SuperLeftAssignOp(start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 
@@ -962,7 +1106,7 @@ class Dlr(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return Dlr(value, start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 class Dots(ASTNode):
@@ -981,8 +1125,8 @@ class Dots(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return Dots(value, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        return atomics.SymbolObj.create('...')
 
 
 class NULL(ASTNode):
@@ -1001,8 +1145,8 @@ class NULL(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return NULL(value, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        return atomics.NULLObj()
 
 class Na(ASTNode):
     def __init__(self, value, start, end):
@@ -1020,8 +1164,8 @@ class Na(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return Na(value, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        return language.Atomic.create(None, types.LogicalType(), is_na=True)
 
 class Nan(ASTNode):
     def __init__(self, value, start, end):
@@ -1039,8 +1183,8 @@ class Nan(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return Nan(value, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        return language.Atomic.create(None, types.DoubleType(), is_nan=True)
 
 class Inf(ASTNode):
     def __init__(self, value, start, end):
@@ -1058,8 +1202,8 @@ class Inf(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return Inf(value, start, end)
 
-    def evaluate(self, env):
-        pass
+    def evaluate(self):
+        return language.Atomic.create(None, types.DoubleType(), is_inf=True)
 
 
 class OrOp(ASTNode):
@@ -1068,7 +1212,7 @@ class OrOp(ASTNode):
         super().__init__('OrOp', start, end)
 
     def __repr__(self, level=0):
-        return ' ' * level + '||'
+        return ' ' * level + str(self.value)
 
     __str__ = __repr__
 
@@ -1078,7 +1222,7 @@ class OrOp(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return OrOp(value, start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 class AndOp(ASTNode):
@@ -1087,7 +1231,7 @@ class AndOp(ASTNode):
         super().__init__('AndOp', start, end)
 
     def __repr__(self, level=0):
-        return ' ' * level + '&&'
+        return ' ' * level + str(self.value)
 
     __str__ = __repr__
 
@@ -1097,7 +1241,7 @@ class AndOp(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return AndOp(value, start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 
@@ -1117,7 +1261,7 @@ class NotOp(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return NotOp(value, start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 class PlusMinOp(ASTNode):
@@ -1136,7 +1280,7 @@ class PlusMinOp(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return PlusMinOp(value, start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 class MultDivOp(ASTNode):
@@ -1155,7 +1299,7 @@ class MultDivOp(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return MultDivOp(value, start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 class UserOp(ASTNode):
@@ -1174,7 +1318,7 @@ class UserOp(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return UserOp(value, start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 class SeqOp(ASTNode):
@@ -1193,7 +1337,7 @@ class SeqOp(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return SeqOp(value, start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 class FactOp(ASTNode):
@@ -1212,7 +1356,7 @@ class FactOp(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return FactOp(value, start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
 class CompOp(ASTNode):
@@ -1231,6 +1375,6 @@ class CompOp(ASTNode):
             print('creating ast node with ' + str(cls.__name__) + 'with children: ' +str(children))
         return CompOp(value, start, end)
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 

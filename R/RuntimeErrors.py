@@ -27,6 +27,11 @@ class InvalidLeftHandAssignment(R_RuntimeError):
         super(InvalidLeftHandAssignment, self).__init__('invalid (do_set) left-hand side to assignment')
 
 
+class InvalidRightHandAssignment(R_RuntimeError):
+    def __init__(self):
+        super(InvalidRightHandAssignment, self).__init__('invalid (do_set) right-hand side to assignment')
+
+
 class ApplyToNonFunction(R_RuntimeError):
     def __init__(self):
         super(ApplyToNonFunction, self).__init__('attempt to apply non-function')

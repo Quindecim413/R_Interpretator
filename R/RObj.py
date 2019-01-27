@@ -14,9 +14,26 @@ class NoClassRegistered(Exception):
 
 
 class RError(Exception):
-    def __init__(self, call, description):
-        self.call = call
-        self.description = description
+    def __init__(self, obj):
+        super(Exception, self).__init__()
+        self.obj: RObj = obj
+
+    @staticmethod
+    def create_simple(call, description):
+        l: RObj = RObj.get_r_obj('ListObj')\
+            .create([ListItem('call', call),
+                     ListItem('message', RObj.get_r_obj('Atomic').create(description, types.CharacterType()))])
+        l.set_attr('class', RObj.get_r_obj('Atomic').create('simpleError', types.CharacterType()))
+        return l
+
+
+def execute_item(executing_object, env):
+    try:
+        ret = executing_object.evaluate(env)
+        return ret
+    except errors.R_RuntimeError as e:
+        r = RError.create_simple(executing_object, e.message)
+        raise r
 
 
 class RObj(object):
@@ -24,19 +41,16 @@ class RObj(object):
         if not isinstance(_type, types.BaseType):
             raise Exception("invalid RObj type - {}".format(_type))
         self._type = _type
-        # self.get_sub = utils.format_call_error(self, self.get_sub)
-        # self.set_sub = utils.format_call_error(self, self.set_sub)
-        # self.get_super_sub = utils.format_call_error(self, self.get_super_sub)
-        # self.set_super_sub = utils.format_call_error(self, self.set_super_sub)
-        # self.get_dlr = utils.format_call_error(self, self.get_dlr)
-        # self.set_dlr = utils.format_call_error(self, self.set_dlr)
-        # self.evaluate = utils.format_call_error(self, self.evaluate)
         self.attributes = dict()
 
-    # def get_class(self):
-    #     if 'class' in self.attributes:
-    #         return
-    #     return
+    def get_attributes(self):
+        return self.attributes
+
+    def get_attr(self, name):
+        return self.attributes.get(name, RObj.get_r_obj('NULLObj')())
+
+    def set_attr(self, name, value):
+        self.attributes[name] = value
 
     def set_value(self, value, env: Environment):
         raise errors.InvalidLeftHandAssignment()
@@ -63,17 +77,31 @@ class RObj(object):
     def get_type(self):
         return self._type
 
+    def get_class(self):
+        r = self.attributes.get('class', None)
+        if not r:
+            ret = self.get_default_class()
+            if not isinstance(ret, RObj) or ret.get_type().name != 'character':
+                raise Exception('get_default_class() method in {} should return character RObj')
+            return ret
+        else:
+            if not isinstance(r, RObj) or r.get_type().name != 'character':
+                raise Exception('get_class() method found not character object in attributes[\'class\'] - {}'.format(r))
+            return r
+
+    def get_classes_as_python_list(self):
+        cl = self.get_class()
+        if isinstance(cl, RObj.get_r_obj('Atomic')):
+            return [cl.value]
+        else:
+            res = []
+            for item in self.items:
+                res.append(item[1].value)
+            return res
+
+    @abstractmethod
     def get_default_class(self):
-        if self._type.name == 'list':
-            return 'list'
-        elif self._type.name == 'character':
-            return 'character'
-        elif self._type.name == 'double':
-            return 'numeric'
-        elif self._type.name == 'integer':
-            return 'integer'
-        elif self._type.name == 'closure':
-            return 'function'
+        raise NotImplementedError("{} should implement get_default_class() method".format(type(self).__name__))
 
     @abstractmethod
     def show_self(self, *args, **kwargs):
@@ -111,5 +139,8 @@ class RObj(object):
     @abstractmethod
     def evaluate(self, env: Environment):
         raise NotImplementedError("{} should implement evaluate() method".format(type(self).__name__))
+
+    def compute(self, env: Environment):
+        raise errors.ApplyToNonFunction()
 
 set_RObj(RObj)

@@ -96,7 +96,7 @@ class ASTNode:
     def create(cls, value, children, start, end):
         pass
 
-    def evaluate(self, env):
+    def evaluate(self):
         pass
 
     def __repr__(self, level=0):

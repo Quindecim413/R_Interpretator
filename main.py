@@ -313,3 +313,10 @@ v = Start.create(None, Visitor().visit(parse_tree), parse_tree.start, parse_tree
 
 print('done')
 print(str(v))
+
+vals = v.evaluate()
+
+print('--------------------printing code------------------')
+
+for val in vals:
+    print(val.show_self())

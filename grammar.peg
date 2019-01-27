@@ -93,5 +93,5 @@ PlusMinOp =         '+' / '-'
 MultDivOp =         '*' / '/'
 UserOp =            ~r'%[^%]%'i
 SeqOp =             ':'
-FactOp =            '^'
+FactOp =            ('^' / '**')
 CompOp =            '>' / '<' / '>=' / '<=' / '!=' / '=='
