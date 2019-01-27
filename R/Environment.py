@@ -1,4 +1,3 @@
-import Execution.RuntimeErrors as errors
 from typing import List
 
 _global_env_ = None
