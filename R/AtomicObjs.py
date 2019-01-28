@@ -43,11 +43,16 @@ class EmptyParamObj(RObj):
 
 @RObj.register_r_obj
 class NULLObj(RObj):
+    def get_default_class(self):
+        return RObj.get_r_obj('Atomic').create('no-NULL', types.CharacterType())
+
     def __init__(self):
         super(NULLObj, self).__init__(types.NULLType())
 
     def show_self(self, *args, **kwargs):
         return 'NULL'
+
+
 
     show_self_for_print = show_self
 
@@ -60,6 +65,9 @@ class NULLObj(RObj):
 
 @RObj.register_r_obj
 class DotsObj(RObj):
+    def get_default_class(self):
+        return RObj.get_r_obj('Atomic').create('no-type', types.NoType())
+
     def __init__(self, items: List[Tuple]):
         super(DotsObj, self).__init__(types.NoType())
         self.items: List[Tuple] = items
@@ -68,6 +76,8 @@ class DotsObj(RObj):
         return '...'
 
     show_self_for_print = show_self
+
+
 
     @staticmethod
     def create(items: List[Param]):
@@ -171,7 +181,7 @@ class ListObj(RObj):
         out = []
         for index, item in enumerate(self.items):
             header = base_header + ('$' + item[0] if item[0] else '[[{}]]'.format(index + 1))
-            if item.value.get_type().name == 'list':
+            if item[1].get_type().name == 'list':
                 res = item[1]._show_from_depth(header)
                 out.append(header+'\n'+res)
             else:

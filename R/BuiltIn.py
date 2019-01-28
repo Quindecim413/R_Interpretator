@@ -62,6 +62,15 @@ def concat_vectors(v1, v2):
         ret = list(zip(res, v2))
         return ret
 
+def extend_up_to_length(_list, length):
+    times = len(_list) // length
+    more = len(_list) - length*times
+    res = []
+    for i in range(times):
+        res.extend(_list)
+    res.extend(_list[:more])
+    return res
+
 
 @RObj.register_r_obj
 class ArrowDefaultAssignFun(BuiltInFun):
@@ -305,7 +314,7 @@ class ListFun(BuiltInFun):
         items = dots.items
         list_items = []
         for item in items:
-            itm = ListItem(item.name, item.value)
+            itm = ListItem(item[0], item[1])
             list_items.append(itm)
         return ListObj(list_items)
 
@@ -315,12 +324,12 @@ register_built_in_function(ListFun)
 
 def perform_op_on_vector_or_atomic(e1, e2, operation):
     res = []
-    if isinstance(e1, Atomic) and not isinstance(e2, Atomic):
+    if not isinstance(e1, Atomic) and isinstance(e2, Atomic):
+        for v in e1.items:
+            res.append(operation(v[1], e2))
+    elif isinstance(e1, Atomic) and not isinstance(e2, Atomic):
         for v in e2.items:
             res.append(operation(e1, v[1]))
-    elif not isinstance(e1, Atomic) and isinstance(e2, Atomic):
-        for v in e1.items:
-            res.append(operation(v, e2[1]))
     elif isinstance(e1, Atomic) and isinstance(e2, Atomic):
         res.append(operation(e1, e2))
     else:
@@ -329,6 +338,23 @@ def perform_op_on_vector_or_atomic(e1, e2, operation):
         for l, r in concat_vectors(e1.items, e2.items):
             res.append(operation(l[1], r[1]))
     return res
+
+
+def perform_op_on_vector_for_every_atomic_or_atomic_of_vector(e1, e2, operation):
+
+    if not isinstance(e1, VectorObj):
+        raise Exception('first param in perform_op_on_vector_for_every_atomic_or_atomic_of_vector should be VectorObj')
+    if isinstance(e2, Atomic):
+        res = operation(e1, e2)
+        return res
+    elif isinstance(e2, VectorObj):
+        res = []
+        for item in e2.items:
+            r = operation(e1, item[1])
+            res.append(r)
+        return res
+    else:
+        raise Exception('second param in perform_op_on_vector_for_every_atomic_or_atomic_of_vector should be VectorObj or Atomic')
 
 
 @RObj.register_r_obj
@@ -744,6 +770,209 @@ class DivModFun(BuiltInFun):
 register_built_in_function(PowerFun)
 
 
+
+# @RObj.register_r_obj
+# class IndexingFun(BuiltInFun):
+#
+#     @staticmethod
+#     def create(*args):
+#         name = '['
+#         args = [Arg('x', None), Arg('...', None)]
+#         return IndexingFun(name, args)
+#
+#     def compute(self, env: Environment):
+#         x = env.find_object_locally('x')
+#         dots: DotsObj = env.find_object_locally('...')
+#         val_x = x.evaluate(env.parent_env)
+#         if not isinstance(val_x, VectorObj) or not isinstance(val_x, ListObj) or not isinstance(val_x, Atomic):
+#             raise errors.ObjectNotSubSettable(val_x)
+#         if len(dots.items) > 1:
+#             raise errors.IncorrectNumberOfDimensions()
+#         elif len(dots.items) == 0:
+#             return val_x
+#
+#         itm = dots.items[0][1]
+#
+#         if not isinstance(itm, VectorObj) or not isinstance(itm, Atomic):
+#             raise errors.InvalidSubscriptType(itm[1].get_type().name)
+#
+#         # keys = []
+#         if isinstance(itm, VectorObj):
+#             keys = [i[1] for i in itm.items]
+#         else:
+#             keys = [itm]
+#
+#         if len(keys) == 0:
+#             return val_x
+#
+#         r = []
+#
+#         def compute_item(item: Atomic):
+#             if item.is_nan or item.is_na or item.is_inf:
+#                 return None
+#             if item.get_type().name == 'character':
+#                 return item.value
+#             if item.get_type().name == 'logical':
+#                 return bool(item.value)
+#             elif item.get_type().name == 'double' or item.get_type().name == 'integer':
+#                 return int(item.value)*(-1 if item.is_neg else 1)
+#             else:
+#                 raise Exception('invalid atomic type - {}'.format(item.get_type().name))
+#
+#         for item in keys:
+#             k = compute_item(item)
+#             r.append(k)
+#
+#         keys = r
+#
+#
+#         if isinstance(val_x, Atomic):
+#             if isinstance(keys[0], bool):
+#                 if keys[0]:
+#                     return val_x
+#                 else:
+#                     return Atomic.create(None, type(val_x.get_type())(), is_na=True)
+#             elif isinstance(keys[0], str):
+#                 return Atomic.create(None, type(val_x.get_type())(), is_na=True)
+#             else:
+#                 if keys[0] != 1:
+#                     return Atomic.create(None, type(val_x.get_type())(), is_na=True)
+#                 else:
+#                     return val_x
+#             # if keys[0].get_type().name == 'character':
+#             #     return Atomic.create(None, type(val_x.get_type())(), is_na=True)
+#             # elif keys[0].get_type().name == 'logical':
+#             #     if keys[0].value:
+#             #         return val_x
+#             #     else:
+#             #         return Atomic.create(None, type(val_x.get_type())(), is_na=True)
+#             # elif keys[0].get_type().name == 'double' or keys[0].get_type().name == 'integer':
+#             #     index = int(keys[0].value) * (-1 if keys[0].is_neg else 1)
+#             #     if index == 0:
+#             #         return VectorObj([], type(keys[0].get_type())())
+#             #     elif index < 0 or index > 1:
+#             #         return Atomic.create(None, type(val_x.get_type())(), is_na=True)
+#             #     else:
+#             #         return Atomic.create(val_x.value, type(val_x.get_type())(), is_na=val_x.is_na, is_nan=val_x.is_nan,
+#             #                              is_inf=val_x.is_inf, is_neg=val_x.is_neg)
+#
+#         # perform_op_on_vector_or_atomic(val_x, itm, )
+#         res = []
+#
+#         if isinstance(keys[0], str):
+#             for el in keys:
+#                 r = list(filter(lambda i: i[0] == el.value, val_x.items))
+#                 if len(r) > 0:
+#                     res.append(r[0])
+#                 else:
+#                     res.append(Atomic.create(None, type(val_x.get_type())(), is_na=True))
+#         elif isinstance(keys[0], bool):
+#             # pairs = concat_vectors(val_x, itm)
+#             ln = max(len(val_x.items))
+#             els = list(zip(extend_up_to_length(val_x.items, ln), extend_up_to_length(keys, ln)))
+#             def chech_pair(atomic, key):
+#
+#             res = list(map( ,els))
+#
+#         elif keys[0].get_type().name == 'double' or keys[0].get_type().name == 'integer':
+#             for el in keys:
+#                 if el.is_na or el.is_nan or el.is_inf:
+#                     res.append(Atomic.create(None, type(val_x.get_type())(), is_na=True))
+#                 else:
+#                     r = val_x.items.get(int(el.value), None)
+#                     if not r:
+#                         res.append(Atomic.create(None, type(val_x.get_type())(), is_na=True))
+#                     else:
+#                         res.append(r)
+
+
+
+
+
+
+register_built_in_function(IndexingFun)
+
+
+@RObj.register_r_obj
+class AssignIndexingFun(BuiltInFun):
+
+    @staticmethod
+    def create(*args):
+        name = '[<-'
+        args = [Arg('x', None), Arg('...', None), Arg('value', None)]
+        return IndexingFun(name, args)
+
+    def compute(self, env: Environment):
+        pass
+
+
+register_built_in_function(AssignIndexingFun)
+
+
+@RObj.register_r_obj
+class SuperIndexingFun(BuiltInFun):
+
+    @staticmethod
+    def create(*args):
+        name = '[['
+        args = [Arg('x', None)]
+        return SuperIndexingFun(name, args)
+
+    def compute(self, env: Environment):
+        pass
+
+
+register_built_in_function(SuperIndexingFun)
+
+
+@RObj.register_r_obj
+class AssignSuperIndexingFun(BuiltInFun):
+
+    @staticmethod
+    def create(*args):
+        name = '[[<-'
+        args = [Arg('x', None), Arg('value', None)]
+        return SuperIndexingFun(name, args)
+
+    def compute(self, env: Environment):
+        pass
+
+
+register_built_in_function(AssignSuperIndexingFun)
+
+
+@RObj.register_r_obj
+class DLRFun(BuiltInFun):
+
+    @staticmethod
+    def create(*args):
+        name = '$'
+        args = [Arg('x', None), Arg('name', None)]
+        return DLRFun(name, args)
+
+    def compute(self, env: Environment):
+        pass
+
+
+register_built_in_function(DLRFun)
+
+
+@RObj.register_r_obj
+class AssignDLRFun(BuiltInFun):
+
+    @staticmethod
+    def create(*args):
+        name = '$<-'
+        args = [Arg('x', None), Arg('name', None), Arg('value', None)]
+        return DLRFun(name, args)
+
+    def compute(self, env: Environment):
+        pass
+
+
+register_built_in_function(AssignDLRFun)
+
+
 @RObj.register_r_obj
 class CatFun(BuiltInFun):
     @staticmethod
@@ -766,6 +995,48 @@ class CatFun(BuiltInFun):
 
 
 register_built_in_function(CatFun)
+
+
+@RObj.register_r_obj
+class PrintFun(BuiltInFun):
+    @staticmethod
+    def create(*args):
+        name = 'print'
+        args = [Arg('x', None), Arg('...', None)]
+        return PrintFun(name, args)
+
+    def compute(self, env: Environment):
+        x = env.find_object_locally('x')
+        res_x = x.show_self()
+        env.standart_output('[1] ' + res_x + '\n')
+        return Atomic.create(res_x, types.CharacterType())
+
+register_built_in_function(PrintFun)
+
+
+# simpleError
+
+
+@RObj.register_r_obj
+class PrintSimpleErrorFun(BuiltInFun):
+    @staticmethod
+    def create(*args):
+        name = 'print.simpleError'
+        args = [Arg('x', None), Arg('...', None)]
+        return PrintFun(name, args)
+
+    def compute(self, env: Environment):
+        x = env.find_object_locally('x')
+        res_x = x.show_self()
+        env.standart_output('[1] ' + res_x + '\n')
+        return Atomic.create(res_x, types.CharacterType())
+
+register_built_in_function(PrintFun)
+
+
+#
+# @RObj.register_r_obj
+# class IndexGetFun()
 
 
 # @RObj.register_r_obj

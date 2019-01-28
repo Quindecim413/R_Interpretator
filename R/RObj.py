@@ -15,7 +15,7 @@ class NoClassRegistered(Exception):
 
 class RError(Exception):
     def __init__(self, obj):
-        super(Exception, self).__init__()
+        super(RError, self).__init__()
         self.obj: RObj = obj
 
     @staticmethod
@@ -24,7 +24,7 @@ class RError(Exception):
             .create([ListItem('call', call),
                      ListItem('message', RObj.get_r_obj('Atomic').create(description, types.CharacterType()))])
         l.set_attr('class', RObj.get_r_obj('Atomic').create('simpleError', types.CharacterType()))
-        return l
+        return RError(l)
 
 
 def execute_item(executing_object, env):
@@ -42,6 +42,7 @@ class RObj(object):
             raise Exception("invalid RObj type - {}".format(_type))
         self._type = _type
         self.attributes = dict()
+        self.__repr__ = self.show_self
 
     def get_attributes(self):
         return self.attributes
@@ -82,7 +83,7 @@ class RObj(object):
         if not r:
             ret = self.get_default_class()
             if not isinstance(ret, RObj) or ret.get_type().name != 'character':
-                raise Exception('get_default_class() method in {} should return character RObj')
+                raise Exception('get_default_class() method in {} should return character RObj'.format(type(self).__name__))
             return ret
         else:
             if not isinstance(r, RObj) or r.get_type().name != 'character':
@@ -101,6 +102,7 @@ class RObj(object):
 
     @abstractmethod
     def get_default_class(self):
+
         raise NotImplementedError("{} should implement get_default_class() method".format(type(self).__name__))
 
     @abstractmethod

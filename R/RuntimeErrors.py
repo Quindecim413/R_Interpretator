@@ -106,3 +106,13 @@ class ArgumentCannotBeHandledByFun(R_RuntimeError):
 class InvalidArg(R_RuntimeError):
     def __init__(self, arg_name):
         super(InvalidArg, self).__init__("invalid '{}' argument".format(arg_name))
+
+
+class IncorrectNumberOfDimensions(R_RuntimeError):
+    def __init__(self):
+        super(IncorrectNumberOfDimensions, self).__init__('incorrect number of dimensions')
+
+
+class InvalidSubscriptType(R_RuntimeError):
+    def __init__(self, type_name):
+        super(InvalidSubscriptType, self).__init__('invalid subscript type \'{}\''.format(type_name))

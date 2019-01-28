@@ -310,3 +310,19 @@ print('--------------------printing code------------------')
 
 for val in vals:
     print(val.show_self())
+
+print('--------------------printing done------------------')
+print('------------------execution starts-----------------')
+
+from R.Executor import Executor
+
+from R.BuiltIn import built_in_env
+
+global_env = Environment(built_in_env)
+global_env.set_global(global_env)
+
+def print_out(message):
+    print(message)
+
+executor = Executor(vals, print_out)
+executor.evaluate(global_env)

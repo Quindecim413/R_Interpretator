@@ -12,6 +12,20 @@ base_obj = None
 
 @RObj.register_r_obj
 class Atomic(RObj):
+    def get_default_class(self):
+        if self.get_type().name == 'character':
+            ret = 'character'
+        elif self.get_type().name == 'double':
+            ret = 'numeric'
+        elif self.get_type().name == 'integer':
+            ret = 'integer'
+        elif self.get_type().name == 'logical':
+            ret = 'logical'
+        else:
+            raise Exception('Invalid atomic type found - {}'.format(self.get_type().name))
+
+        return Atomic.create('ret', types.CharacterType())
+
     def show_self(self, *args, **kwargs):
         if self.is_na:
             i = 'NA'
@@ -29,6 +43,9 @@ class Atomic(RObj):
         return i
 
     show_self_for_print = show_self
+
+    def __repr__(self):
+        return 'atomic - {}({})'.format(self.value, self.get_type().name)
 
     def evaluate(self, env: Environment):
         # ret = RObj.get_r_obj('VectorObj')([VectorItem(None, self)])

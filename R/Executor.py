@@ -20,8 +20,16 @@ class Executor(object):
         env.standart_output = self.standard_output
         try:
             for item in self.items:
-                res = execute_item(item, env)
-                self.standard_output(res.show_self())
+                val = item.show_self()
+                self.standard_output('> '+val)
+                res: RObj = execute_item(item, env)
+                func = env.find_function('print', classes_names=res.get_classes_as_python_list())
+                try:
+                    new_env = arrange_params_with_function_args([Param('x', res)], func, env)
+                    func.compute(new_env)
+                except Exception as e:
+                    self.standard_output(str(e))
+                # self.standard_output(res.show_self())
         except CommandException as e:
             self.standard_output(e.message)
         except R_RuntimeError as e:
@@ -29,9 +37,13 @@ class Executor(object):
         except RError as e:
             func = env.find_function('print')
             try:
-                arrange_params_with_function_args([Param('x', e)], func, env)
+                new_env = arrange_params_with_function_args([Param('x', e)], func, env)
+                func.compute(new_env)
             except Exception as e:
                 self.standard_output(str(e))
+        except Exception as e:
+            print(e)
+            raise
         finally:
             env.standart_output = standart_for_env
             return None
